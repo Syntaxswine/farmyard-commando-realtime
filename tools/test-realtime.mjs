@@ -70,13 +70,16 @@ try{
   await tap(page,'#menu',phone);const paused=await snapshot(page);await page.waitForTimeout(250);assert.equal((await snapshot(page)).elapsed,paused.elapsed);await page.getByRole('button',{name:'Continue operation',exact:true}).click();mark(name+' inventory/options pause the actual simulation');
   await tap(page,'#menu',phone);await page.getByRole('button',{name:'Fire control: aim & target priority',exact:true}).click();await page.getByRole('button',{name:'Target: Weakest',exact:true}).click();await page.getByRole('button',{name:'Return to operation',exact:true}).click();assert.equal((await snapshot(page)).priority,'weakest');mark(name+' persistent targeting priority through actual menu');
   if(!phone){
+    // Automatic defence must already be armed when the deliberate point shot
+    // alerts the guards, including while a slow renderer handles later controls.
+    await page.locator('#end-turn').click();assert((await snapshot(page)).autoFire);
     // Real point-fire controls create a reload opportunity without injecting state.
     await page.locator('#menu').click();await page.getByRole('button',{name:'Aim firearm at a point',exact:true}).click();await pointClick(page,{x:5,y:20,h:1.1});await page.getByRole('button',{name:/^Fire ·/}).click();
-    s=await wait(page,s=>s.ammo===29,'manual point shot');await page.locator('#menu').click();await page.getByRole('button',{name:/^Reload AK-47/}).click();s=await wait(page,s=>s.reloading,'timed reload');assert.equal(s.ammo,29);const before=s.player;
-    await page.keyboard.down('a');try{s=await wait(page,s=>Math.hypot(s.player.x-before.x,s.player.y-before.y)>.1,'held movement during reload',8000);}finally{await page.keyboard.up('a');}await screenshot(page,'desktop-reload-moving');await wait(page,s=>!s.reloading&&s.ammo===30,'completed reload');mark('desktop real shot, timed reload, reserve consumption and movement');
+    s=await wait(page,s=>s.ammo<30,'manual point shot');await page.locator('#menu').click();const reserveBefore=(await snapshot(page)).reserve;await page.getByRole('button',{name:/^Reload AK-47/}).click();s=await wait(page,s=>s.reloading,'timed reload');assert(s.ammo<30);const before=s.player;
+    await page.keyboard.down('a');try{s=await wait(page,s=>Math.hypot(s.player.x-before.x,s.player.y-before.y)>.1,'held movement during reload',8000);}finally{await page.keyboard.up('a');}await screenshot(page,'desktop-reload-moving');await wait(page,s=>!s.reloading&&s.reserve<reserveBefore,'completed reload');mark('desktop real shot, timed reload, reserve consumption and movement');
     // The point shot already alerted the guards. Hold the covered arrival area
     // and let them approach; pause immediately after the automatic engagement.
-    await page.locator('#end-turn').click();s=await wait(page,s=>s.kills>0||s.ammo<30,'automatic engagement',25000);assert(s.autoFire);assert.notEqual(s.phase,'enemy');await page.locator('#menu').click();await screenshot(page,'desktop-fire-at-will');mark('desktop fire at will in authored encounter',{ammo:s.ammo,kills:s.kills,phase:s.phase});
+    s=await wait(page,s=>s.kills>0||s.ammo<30,'automatic engagement',25000);assert(s.autoFire);assert.notEqual(s.phase,'enemy');await page.locator('#menu').click();await screenshot(page,'desktop-fire-at-will');mark('desktop fire at will in authored encounter',{ammo:s.ammo,kills:s.kills,phase:s.phase});
     await page.getByRole('button',{name:'Choose operation, animal & loadout',exact:true}).click();assert.equal(await page.locator('#resume').isVisible(),true);await page.locator('#resume').click();s=await wait(page,s=>s.ready,'saved encounter');assert(s.autoFire);mark('desktop real operation save/resume');
   }else{
     const original=await snapshot(page);await tap(page,'#movement-cycle',true);assert((await snapshot(page)).player.sneaking);await tap(page,'#movement-cycle',true);assert(!(await snapshot(page)).player.sneaking);
