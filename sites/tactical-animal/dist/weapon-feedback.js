@@ -2,8 +2,10 @@ import * as T from './aft/tactics/vendor/three.module.js';
 import {visibleShotSegments} from './aft/tactics/battle-shot-effects.js';
 import {BattleAudio} from './designer/a20b343a0234/tactics/battle-audio.js';
 import {GUN_SOUND} from './designer/a20b343a0234/tactics/battle-sound-data.js';
+import {projectileSegmentClear} from './solo-game.js';
 
 const V=(x=0,y=0,z=0)=>new T.Vector3(x,y,z);
+const shotPoint=point=>({x:point.x,y:point.z,h:point.y});
 const clipIds=[...new Set(Object.values(GUN_SOUND)),'shotgun-pump','explosion-large','explosion-deep','flame-ignite','melee-swing'];
 const urls=Object.fromEntries(clipIds.map(id=>[id,new URL('./assets/audio/weapon-sfx/'+id+'.wav',import.meta.url).href]));
 export const GRENADE_IMPACT_MS=500;
@@ -40,13 +42,15 @@ export function traceEnd(event){
   return V(end.x,end.h,end.y);
 }
 
-export function traceStart(event,muzzle,end,followActor=false){
+export function traceStart(event,muzzle,end,state){
   const start=V(event.ax,event.ah??1.1,event.ay);
   const direction=end.clone().sub(start),distance=direction.length();
   if(!distance)return start;
   if(event.sourceVisible===false)return start.addScaledVector(direction,Math.min(.9/distance,1));
-  if(muzzle&&(followActor||muzzle.distanceToSquared(start)<1.8)&&muzzle.clone().sub(start).dot(direction)<distance*distance)return muzzle;
-  return start;
+  if(!(muzzle&&muzzle.distanceToSquared(start)<1.8&&muzzle.clone().sub(start).dot(direction)<distance*distance))return start;
+  const bore=shotPoint(muzzle);
+  if(state&&(!projectileSegmentClear(state,shotPoint(start),bore)||!projectileSegmentClear(state,bore,shotPoint(end))))return start;
+  return muzzle;
 }
 
 // Crossed world-space ribbons remain legible on mobile GPUs where line width

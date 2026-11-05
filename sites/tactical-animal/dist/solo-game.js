@@ -458,6 +458,14 @@ export function previewPointAttack(s,a,point,burst=false,aimLevel='hip'){
   return {ok:!reason,reason,cost:s.realtime?0:aim?.cost??0,rounds,distance:d,cover:0,chance:Math.round(Math.max(5,Math.min(95,weaponAccuracy(a)+(w?.accuracy||0)-(w?.rangeLoss||0)*d/(w?.range||1)+(aim?.accuracy||0))))};
 }
 const shotHeight=(point,zone)=>point.ground?point.h:zone==='head'?bodyHeight(point):zone==='legs'?bodyHeight(point)*.25:bodyHeight(point)*.62;
+// A visual muzzle may replace the recorded start only along clear air.
+// Contact at the recorded endpoint is valid, including a shot into a wall.
+export function projectileSegmentClear(s,a,b){
+  return !geometryNear(s,a,b,0,'air').some(box=>{
+    const span=airSpan(a,b,a.h,b.h,box);
+    return span&&span[0]<1-EPS&&span[1]>EPS;
+  });
+}
 function firstShotObstacle(s,a,b,source,end){
   let obstacle=null;
   for(const box of geometryNear(s,a,b,0,'air')){

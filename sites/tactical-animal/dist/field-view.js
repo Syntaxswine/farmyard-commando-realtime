@@ -32,6 +32,7 @@ const V = (x=0,y=0,z=0) => new T.Vector3(x,y,z);
 // Distinct tracer pulses make each committed burst round readable. A shorter
 // lifetime than the interval prevents identical paths merging into one beam.
 const BURST_SHOT_INTERVAL=140,BURST_TRACER_DURATION=90,FLASH_DURATION=72;
+const MUZZLE_SOURCE_TOLERANCE=.04;
 function disposeEffectMesh(mesh){
   if(!mesh)return;
   mesh.removeFromParent();mesh.geometry.dispose();mesh.material.dispose();
@@ -335,9 +336,13 @@ export class FieldView {
       const {event,line}=shot,age=now-shot.at;
       if(shot.hasTrace===undefined){
         const actor=this.actors.get(event.shooter),end=traceEnd(event);
-        const muzzle=event.sourceVisible!==false&&actor?.root.visible&&actor.weapon===event.weapon&&shot.fitted!==false
+        const position=actor?.root.position;
+        // A delayed visual round can play after the shooter has moved. Its
+        // muzzle belongs to the event only while the firing position matches.
+        const atSource=position&&Math.hypot(position.x-event.ax,position.z-event.ay)<=MUZZLE_SOURCE_TOLERANCE;
+        const muzzle=atSource&&event.sourceVisible!==false&&actor.root.visible&&actor.weapon===event.weapon&&shot.fitted!==false
           ?actor.equipment.anchors.muzzle?.getWorldPosition(V()):null;
-        const origin=traceStart(event,muzzle,end,!!s.realtime&&!!shot.pose);
+        const origin=traceStart(event,muzzle,end,s);
         shot.hasTrace=setTracer(line,origin,end,s,event.weapon);line.visible=shot.hasTrace;
         if(muzzle===origin&&s.visible.has(Core.key(origin.x,origin.z))){
           shot.flash=muzzleFlash(origin,end,event.weapon);this.scene.add(shot.flash);
