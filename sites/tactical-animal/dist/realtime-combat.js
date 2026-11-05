@@ -215,5 +215,18 @@ export function createRealtimeRules({hero,alive,distance,canSee,confirmedImpact,
     refresh(s);
   }
   function status(s){const u=hero(s),a=actor(s,u),r=s.realtime;return {autoFire:r.autoFire,fireMode:modeFor(u.weapon,savedMode(r)),triggerHeld:heldTriggers.has(s),aim:r.aim,priority:r.priority,targetId:r.targetId,pinnedId:r.pinnedId,remaining:a.reload?.remaining??a.cooldown,reloading:!!a.reload,aimRemaining:a.aimRemaining,ammo:u.ammo[u.weapon]||0,reserve:u.ammoPouch[u.weapon]||0,kills:r.kills,automatic:automaticWeapon(u.weapon),weapon:u.weapon};}
-  return {enable,actor,ready,busy,configure,pin,changedWeapon,reload,requestShot,pressTrigger,releaseTrigger,choose,step,status};
+  // The renderer reads the active order without consuming it or starting a shot.
+  function aimFor(s,u){
+    const r=s.realtime,a=r?.actors[u.id],player=u.team==='squad';
+    if(!a?.signature||a.weapon!==u.weapon||a.reload||!alive(u)||u.burningTurns)return null;
+    if(player&&r.suspended||!player&&!u.alert)return null;
+    const order=player?(heldTriggers.get(s)?.order??a.manual):null;
+    if(player&&!order&&!r.autoFire)return null;
+    const target=order?.point??s.units.find(v=>v.id===a.targetId);
+    if(!target||!target.ground&&(!alive(target)||player&&!s.detected.has(target.id)))return null;
+    const aim=order?.aim??(player?r.aim:'hip'),zone=order?.zone??(player?r.zone:'torso');
+    const seconds=shotSeconds(u.weapon,aim,player?savedMode(order??r):'single');
+    return {target,zone,progress:1-a.aimRemaining/seconds};
+  }
+  return {enable,actor,ready,busy,configure,pin,changedWeapon,reload,requestShot,pressTrigger,releaseTrigger,choose,step,status,aimFor};
 }

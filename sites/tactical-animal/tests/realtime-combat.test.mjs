@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {Core,ANIMALS,createSoloGame,DEFAULT_BUILD,FIRST_REALTIME_MISSION,MISSIONS,hero,tick,encodeSave,decodeSave,lineClear,walkSegment} from '../dist/solo-game.js';
+import {Core,ANIMALS,createSoloGame,DEFAULT_BUILD,FIRST_REALTIME_MISSION,MISSIONS,hero,tick,encodeSave,decodeSave,lineClear,walkSegment,realtimeWeaponAim} from '../dist/solo-game.js';
 import {windowReviewSource,WINDOW_REVIEW_ID} from '../dist/window-review-map.js';
 import {shotSeconds,WEAPON_TIMING} from '../dist/realtime-combat.js';
 import {loadTownTour} from '../dist/mount-dora-entry.js';
@@ -20,6 +20,24 @@ function fixture({primary='assault',guards=[{x:28,y:25}],crate=false,door=false}
 }
 function advance(s,seconds,input=null,step=.05){for(let t=0;t<seconds-1e-8;t+=step)tick(s,Math.min(step,seconds-t),input);}
 function action(a,label){const b=a.el('overlay-actions').children.find(b=>b.textContent.startsWith(label));assert(b,label);return b;}
+
+test('the visible aim follows an accepted order before discharge without spending a round',()=>{
+ const s=fixture({primary:'hmg'}),u=hero(s),target=s.units[1],ammo=u.ammo.hmg;
+ Core.setStance(s,u,'prone');assert.equal(realtimeWeaponAim(s,u),null);
+ assert.ok(Core.attack(s,u,target,false,false,'legs',false,'aimed'));
+ advance(s,.25);
+ const saved=encodeSave(s),first=realtimeWeaponAim(s,u);
+ assert.ok(first.progress>0&&first.progress<1);
+ assert.deepEqual([first.x,first.y,first.h],[target.x,target.y,1.75*.25]);
+ assert.equal(encodeSave(s),saved);
+ assert.equal(u.ammo.hmg,ammo);
+ advance(s,.50);
+ assert.ok(realtimeWeaponAim(s,u).progress>first.progress);
+ assert.equal(u.ammo.hmg,ammo);
+ advance(s,.30);
+ assert.equal(u.ammo.hmg,ammo-1);
+ assert.equal(realtimeWeaponAim(s,u),null);
+});
 
 test('full inherited operations coexist with an initially unengaged real-time encounter',()=>{
  assert.equal(MISSIONS.length,3);

@@ -709,6 +709,12 @@ export const configureRealtime=(s,changes)=>realtimeRules.configure(s,changes);
 export const pinRealtimeTarget=(s,id)=>realtimeRules.pin(s,id);
 export const realtimeStatus=s=>s.realtime?realtimeRules.status(s):null;
 export const realtimeTarget=s=>s.realtime?realtimeRules.choose(s):null;
+export function realtimeWeaponAim(s,u){
+  const aim=realtimeRules.aimFor(s,u);
+  if(!aim)return null;
+  const {target,zone,progress}=aim;
+  return {x:target.x,y:target.y,h:shotHeight(target,zone),progress};
+}
 const pressRealtimeTrigger=(s,u,target,zone,aim)=>realtimeRules.pressTrigger(s,u,target,zone,aim);
 const releaseRealtimeTrigger=(s,tap)=>realtimeRules.releaseTrigger(s,tap);
 export const Core={enableRealtime,configureRealtime,pinRealtimeTarget,realtimeStatus,realtimeTarget,pressRealtimeTrigger,releaseRealtimeTrigger,tankExplosionChance,ignite,enterFire,WEAPONS,AIM_ZONES,key,alive,movementModeOf,movementRate,movementSpeed,combatCosts,canControl,canSee,visibleOpponents,refresh,log,stop,travel,navigationPath,move,turnTo,setMovementMode,setStance,grenadeCost,grenadeTrajectory,grenadeAffects,grenadeBlastFootprint,previewGrenade,throwGrenade,previewFlame,fireFlame,previewPointAttack,previewAttack,attack,equip,reload,endTurn,headingTo,interactionObjects,nearbyInteractions,previewInteraction,performInteraction,restoreRuntimeSystems};

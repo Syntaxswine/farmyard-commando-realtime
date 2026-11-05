@@ -40,18 +40,18 @@ export function traceEnd(event){
   return V(end.x,end.h,end.y);
 }
 
-export function traceStart(event,muzzle,end){
+export function traceStart(event,muzzle,end,followActor=false){
   const start=V(event.ax,event.ah??1.1,event.ay);
   const direction=end.clone().sub(start),distance=direction.length();
   if(!distance)return start;
   if(event.sourceVisible===false)return start.addScaledVector(direction,Math.min(.9/distance,1));
-  if(muzzle&&muzzle.distanceToSquared(start)<1.8&&muzzle.clone().sub(start).dot(direction)<distance*distance)return muzzle;
+  if(muzzle&&(followActor||muzzle.distanceToSquared(start)<1.8)&&muzzle.clone().sub(start).dot(direction)<distance*distance)return muzzle;
   return start;
 }
 
 // Crossed world-space ribbons remain legible on mobile GPUs where line width
 // is fixed to one pixel. Reuse AFT's fog clipping before filling the ribbons.
-export function setTracer(beam,start,end,state){
+export function setTracer(beam,start,end,state,weapon){
   start.shotLevel=end.shotLevel=0;
   const points=state?.visible?visibleShotSegments(state,[start,end]):[start,end];
   const positions=[];
@@ -59,7 +59,8 @@ export function setTracer(beam,start,end,state){
     const a=points[i];let b=points[i+1];
     while(points[i+2]?.equals(b)){i+=2;b=points[i+1];}
     const direction=b.clone().sub(a).normalize();
-    const side=V().crossVectors(direction,Math.abs(direction.y)>.95?V(1,0,0):V(0,1,0)).normalize().multiplyScalar(.044);
+    const width=weapon==='rpg'?.082:weapon==='launcher'?.062:.044;
+    const side=V().crossVectors(direction,Math.abs(direction.y)>.95?V(1,0,0):V(0,1,0)).normalize().multiplyScalar(width);
     for(const offset of [side,V().crossVectors(direction,side)]){
       const p=a.clone().add(offset),q=a.clone().sub(offset),r=b.clone().sub(offset),s=b.clone().add(offset);
       positions.push(...p.toArray(),...q.toArray(),...r.toArray(),...p.toArray(),...r.toArray(),...s.toArray());
@@ -70,40 +71,14 @@ export function setTracer(beam,start,end,state){
   return positions.length>0;
 }
 
-export function muzzleFlash(origin,end){
+export function muzzleFlash(origin,end,weapon){
+  const heavy=weapon==='rpg'||weapon==='launcher'||weapon==='backblast';
   const flash=new T.Mesh(new T.IcosahedronGeometry(1,0),new T.MeshBasicMaterial({
-    color:0xffefa8,transparent:true,depthWrite:false,toneMapped:false
+    color:weapon==='backblast'?0xfba46a:heavy?0xffb653:0xffefa8,transparent:true,depthWrite:false,toneMapped:false
   }));
-  flash.name='Weapon muzzle flash';
+  flash.name=weapon==='backblast'?'RPG exhaust':'Weapon muzzle flash';
   flash.position.copy(origin);
-  flash.scale.set(.19,.105,.105);
+  flash.scale.set(heavy?.30:.19,heavy?.15:.105,heavy?.15:.105);
   flash.quaternion.setFromUnitVectors(V(1,0,0),end.clone().sub(origin).normalize());
   return flash;
-}
-
-export function applyDischargePose(actor,sample,event,age){
-  const gun=actor.equipment,weapon=event.weapon,throwing=weapon==='grenade';
-  const decay=Math.max(0,1-age/(throwing?340:220));
-  const kick=decay*decay;
-  if(ballistic(weapon)&&actor.rifle&&gun.anchors.stock&&gun.anchors.support&&!sample.pose.prone&&!sample.blend){
-    const target=traceEnd(event).sub(V(sample.x,0,sample.y));
-    if(actor.rifle.apply({aim:.95*decay,recoil:2.2*kick,target,sample}).supported)return 'AFT rifle';
-  }
-
-  // A joint overlay keeps the running legs planted on their normal gait. Carry
-  // the equipped mesh with the same joint delta to retain the authored grip.
-  const oneHanded=throwing||!gun.anchors.support;
-  const joint=oneHanded?actor.firingArm:actor.firingSpine;
-  if(!joint)return null;
-  const carry=gun.root.visible&&!throwing&&gun.root.parent;
-  const before=carry?joint.matrixWorld.clone().invert().multiply(gun.root.matrixWorld):null;
-  if(throwing)joint.rotateZ(-.92*Math.sin(Math.PI*decay));
-  else if(ballistic(weapon))joint.rotateZ((oneHanded?.58:.19)*kick);
-  else{joint.rotateZ(.67*kick);joint.rotateY(-.45*decay);}
-  actor.worker.root.updateMatrixWorld(true);
-  if(before){
-    const transform=carry.matrixWorld.clone().invert().multiply(joint.matrixWorld).multiply(before);
-    transform.decompose(gun.root.position,gun.root.quaternion,gun.root.scale);
-  }
-  return throwing?'throw':ballistic(weapon)?'recoil':'melee';
 }

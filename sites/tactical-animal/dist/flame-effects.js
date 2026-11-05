@@ -84,11 +84,12 @@ export class SoloFlameEffects {
     }
     this.state=state;
   }
-  poseFor(unit){
-    if(unit.hp<=0||unit.weapon!=='flamethrower'||unit.isMoving)return null;
+  poseFor(unit,{moving=false}={}){
+    if(unit.hp<=0||unit.weapon!=='flamethrower'||unit.isMoving&&!moving)return null;
     const entry=this.queue.find(entry=>{
       const source=entry.shape.source;
-      return source.id===unit.id&&source.stance===unit.stance&&source.species===unit.species&&Math.hypot(unit.x-source.x,unit.y-source.y)<.04&&Math.abs(((unit.heading-source.heading+540)%360)-180)<.1;
+      return source.id===unit.id&&source.stance===unit.stance&&source.species===unit.species&&
+        (moving&&unit.isMoving||Math.hypot(unit.x-source.x,unit.y-source.y)<.04&&Math.abs(((unit.heading-source.heading+540)%360)-180)<.1);
     });
     return entry?{entry,seconds:entry.elapsed,reduced:!!this.reducedMotion()}:null;
   }
