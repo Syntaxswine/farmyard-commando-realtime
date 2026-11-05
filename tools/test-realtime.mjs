@@ -22,7 +22,7 @@ const server=http.createServer((req,res)=>{
 });
 const released=port=>new Promise(resolve=>{const s=net.connect(port,'127.0.0.1');s.once('connect',()=>{s.destroy();resolve(false);});s.once('error',()=>resolve(true));s.setTimeout(1500,()=>{s.destroy();resolve(false);});});
 const identity=(pid,executable)=>({pid,executable,created:process.platform==='win32'?execFileSync('powershell.exe',['-NoLogo','-NoProfile','-Command',`(Get-CimInstance Win32_Process -Filter 'ProcessId = ${pid}').CreationDate.ToUniversalTime().ToString('o')`],{encoding:'utf8',windowsHide:true}).trim():execFileSync('ps',['-p',String(pid),'-o','lstart='],{encoding:'utf8'}).trim()});
-let browserServer,browser,port,wsPort,deadline,closing=false;
+let browserServer,browser,port,wsPort,deadline,closing=false,activePage;
 async function close(){
  if(closing)return;closing=true;clearTimeout(deadline);const errors=[];
  for(const [name,fn]of [['browser',()=>browser?.close()],['browserServer',()=>browserServer?.close()]])try{await fn();}catch(e){errors.push({name,message:e.message});}
@@ -49,8 +49,8 @@ try{
  browserServer=await chromium.launchServer({host:'127.0.0.1',headless:true,...process.env.REALTIME_BROWSER_CHANNEL?{channel:process.env.REALTIME_BROWSER_CHANNEL}:{},args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
  wsPort=Number(new URL(browserServer.wsEndpoint()).port);report.helpers.push({...identity(browserServer.process().pid,'Chromium'),purpose:'Disposable headless native browser',port:wsPort,expiry:'Current acceptance only',stop:'browserServer.close()'});save();browser=await chromium.connect(browserServer.wsEndpoint());
  for(const phone of [false,true]){
-  const name=phone?'phone':'desktop',context=await browser.newContext({viewport:phone?{width:390,height:844}:{width:1000,height:800},isMobile:phone,hasTouch:phone,deviceScaleFactor:1});
-  await context.addInitScript(installNativeProbe);const page=await context.newPage(),log=capture(page,name);
+  const name=phone?'phone':'desktop',context=await browser.newContext({viewport:phone?{width:390,height:844}:{width:800,height:600},isMobile:phone,hasTouch:phone,deviceScaleFactor:1});
+  await context.addInitScript(installNativeProbe);const page=await context.newPage(),log=capture(page,name);activePage=page;
   await page.goto(`http://127.0.0.1:${port}/game.html`);assert.equal(await page.locator('#operation-select').inputValue(),'quiet-shift');assert.equal(await page.locator('#operation-select option').count(),5);
   await page.locator('#animals button').filter({hasText:'Yakov'}).click();await page.locator('#utility button').filter({hasText:'Frag grenades'}).click();await page.locator('#deploy').click();
   let s=await wait(page,s=>s.ready,'initial renderer');assert.equal(s.autoFire,false);assert.equal(s.phase,'explore');assert.equal(s.shaderFailures,0);await screenshot(page,name+'-start');
@@ -63,14 +63,14 @@ try{
     // Real point-fire controls create a reload opportunity without injecting state.
     await page.locator('#menu').click();await page.getByRole('button',{name:'Aim firearm at a point',exact:true}).click();await pointClick(page,{x:5,y:20,h:1.1});await page.getByRole('button',{name:/^Fire ·/}).click();
     s=await wait(page,s=>s.ammo===29,'manual point shot');await page.locator('#menu').click();await page.getByRole('button',{name:/^Reload AK-47/}).click();s=await wait(page,s=>s.reloading,'timed reload');assert.equal(s.ammo,29);const before=s.player;
-    await page.keyboard.down('a');await page.waitForTimeout(150);await page.keyboard.up('a');s=await snapshot(page);assert(Math.hypot(s.player.x-before.x,s.player.y-before.y)>.1);await screenshot(page,'desktop-reload-moving');await wait(page,s=>!s.reloading&&s.ammo===30,'completed reload');mark('desktop real shot, timed reload, reserve consumption and movement');
+    await page.keyboard.down('a');try{s=await wait(page,s=>Math.hypot(s.player.x-before.x,s.player.y-before.y)>.1,'held movement during reload',8000);}finally{await page.keyboard.up('a');}await screenshot(page,'desktop-reload-moving');await wait(page,s=>!s.reloading&&s.ammo===30,'completed reload');mark('desktop real shot, timed reload, reserve consumption and movement');
     await page.locator('#end-turn').click();await moveTo(page,{x:19,y:23});await moveTo(page,{x:19,y:12});
     s=await wait(page,s=>s.kills>0||s.ammo<30,'automatic engagement',25000);assert(s.autoFire);assert.notEqual(s.phase,'enemy');await screenshot(page,'desktop-fire-at-will');mark('desktop fire at will in authored encounter',{ammo:s.ammo,kills:s.kills,phase:s.phase});
     await page.locator('#menu').click();await page.getByRole('button',{name:'Choose operation, animal & loadout',exact:true}).click();assert.equal(await page.locator('#resume').isVisible(),true);await page.locator('#resume').click();s=await wait(page,s=>s.ready,'saved encounter');assert(s.autoFire);mark('desktop real operation save/resume');
   }else{
     const original=await snapshot(page);await tap(page,'#movement-cycle',true);assert((await snapshot(page)).player.sneaking);await tap(page,'#movement-cycle',true);assert(!(await snapshot(page)).player.sneaking);
     const stick=await page.locator('#joystick').boundingBox(),cx=stick.x+stick.width/2,cy=stick.y+stick.height/2,cdp=await context.newCDPSession(page);
-    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:cx,y:cy}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:cx-25,y:cy+8}]});await page.waitForTimeout(150);await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});s=await snapshot(page);assert(Math.hypot(s.player.x-original.player.x,s.player.y-original.player.y)>.1);mark('phone actual touch movement and sneak');
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:cx,y:cy}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:cx-25,y:cy+8}]});try{s=await wait(page,s=>Math.hypot(s.player.x-original.player.x,s.player.y-original.player.y)>.1,'held phone movement',8000);}finally{await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});}mark('phone actual touch movement and sneak');
     // Aim north in world space, using the same native stick controls as a player.
     await tap(page,'#grenade',true);await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:cx,y:cy}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:cx+49,y:cy-59}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
     const button=page.locator('#grenade');assert.equal(await button.isDisabled(),false);await tap(page,'#grenade',true);s=await wait(page,s=>s.player.ammo.grenade===2,'real touch grenade throw');await screenshot(page,'phone-grenade');mark('phone real grenade aim, release and confirmation');await cdp.detach();
@@ -79,6 +79,6 @@ try{
  }
  // The editor's default proving yard also uses the same real-time Core.
  const context=await browser.newContext({viewport:{width:1000,height:800}}),page=await context.newPage(),log=capture(page,'window-yard');await page.goto(`http://127.0.0.1:${port}/window-yard.html`);await page.waitForFunction(()=>document.querySelector('#loading').hidden);assert.match(await page.locator('#status').textContent(),/Real time/);await screenshot(page,'real-time-proving-yard');assert.equal(log.errors.length,0);mark('editor proving yard production real-time bootstrap');await context.close();report.success=true;
-}catch(error){report.failure=error.stack||String(error);process.exitCode=1;console.error(error.stack||error);}
+}catch(error){report.failure=error.stack||String(error);if(activePage&&!activePage.isClosed()){try{report.failureSnapshot=await snapshot(activePage);await screenshot(activePage,'failure');}catch{}}process.exitCode=1;console.error(error.stack||error);}
 finally{await close();}
 if(report.success)console.log('Real-time native acceptance passed; disposable helpers stopped.');
