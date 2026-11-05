@@ -176,7 +176,7 @@ function start(s,{resume=false}={}){try{
   pointTargeting=false;selected=null;interactionFocus=null;handTarget=null;grenadeAim.cancel();flameAim.cancel();lastHeldWeapon=hero(s).weapon;areaPress=false;aimViewport=null;contextKey='';resultShown=false;stanceDirection=1;movementDirection=-1;aim='hip';zone='torso';burst=false;
   $('prep').hidden=true;$('battle').hidden=false;document.body.classList.add('in-battle');active=true;paused=false;
   view=new FieldView($('viewport'),{onPick:pick,getAimViewport:grenadeViewport,onLoading:busy=>{$('loading').hidden=!busy;frameClock.reset(busy?null:performance.now());},onError:message=>{if(isTour(state))tourArtError=message;$('loading').hidden=false;$('loading').textContent='Animal artwork could not load. '+message;}});
-  view.setGame(state);lastPhase=state.phase;frameClock.reset(performance.now());lastUI=0;lastSave=performance.now();renderBattle();storage.write();
+  view.setGame(state);view.unlockSound?.();lastPhase=state.phase;frameClock.reset(performance.now());lastUI=0;lastSave=performance.now();renderBattle();storage.write();
 }catch(error){active=false;view?.dispose();view=null;$('prep').hidden=false;$('battle').hidden=true;document.body.classList.remove('in-battle');toast('Cannot start 3D view: '+error.message);}}
 function backToPrep(){cancelAreaAim();resetStick();keys.clear();Core.stop(state);storage.write();guardAlert.stop();active=false;view?.dispose();view=null;getTourWorld(state)?.dispose();$('battle').hidden=true;$('prep').hidden=false;document.body.classList.remove('in-battle');renderPrep();}
 $('deploy').onclick=()=>selectedMissionId===TOUR_ID?launchTour():start(createSoloGame(build,1947,selectedMissionId));$('resume').onclick=()=>{if(selectedMissionId===TOUR_ID){launchTour({resume:true});return;}try{const s=operationStorage.load(selectedMissionId);if(s.solo.status!=='active'){toast('That operation has ended. Deploy a new animal to begin again.');return;}start(s,{resume:true});}catch(error){toast('Could not resume: '+error.message);}};
@@ -637,10 +637,11 @@ function updateStick(e){
   if(flameAim.active){flameAim.aim(stick);renderFlameControls();}
   else if(grenadeAim.active){grenadeAim.aim(hero(state),stick,Core.WEAPONS.grenade.range);updateGrenadePreview();}else view?.center();
 }
-$('joystick').onpointerdown=e=>{if(e.button!==0||stickPointer!==null||!state||paused||!Core.canControl(state,hero(state)))return;e.preventDefault();stickPointer=e.pointerId;$('joystick').setPointerCapture(e.pointerId);Core.stop(state);selected=null;if(!aiming())view.route([]);updateStick(e);};$('joystick').onpointermove=e=>{if(e.pointerId===stickPointer)updateStick(e);};
+$('joystick').onpointerdown=e=>{if(e.button!==0||stickPointer!==null||!state||paused||!Core.canControl(state,hero(state)))return;e.preventDefault();view?.unlockSound?.();stickPointer=e.pointerId;$('joystick').setPointerCapture(e.pointerId);Core.stop(state);selected=null;if(!aiming())view.route([]);updateStick(e);};$('joystick').onpointermove=e=>{if(e.pointerId===stickPointer)updateStick(e);};
 for(const name of ['pointerup','pointercancel','lostpointercapture'])$('joystick').addEventListener(name,e=>{if(e.pointerId===stickPointer){resetStick();if(grenadeAim.active)renderGrenadeControls();if(flameAim.active)renderFlameControls();}});
 addEventListener('keydown',e=>{
   if(!active||paused||e.defaultPrevented||/INPUT|SELECT|TEXTAREA/.test(e.target.tagName))return;
+  if(!e.repeat)view?.unlockSound?.();
   const k=e.key.toLowerCase(),button=e.target.closest('button');
   if(k==='escape'&&pointTargeting){pointTargeting=false;toast('Target selection cancelled.');return;}
   if(REALTIME&&k==='q'){e.preventDefault();if(!e.repeat)cycleRealtimeAim();return;}
@@ -658,11 +659,12 @@ addEventListener('keyup',e=>{keys.delete(e.key.toLowerCase());if(grenadeAim.acti
 document.addEventListener('freeze',()=>{pageFrozen=true;frameClock.reset();resetStick();keys.clear();});
 document.addEventListener('resume',()=>{pageFrozen=false;frameClock.reset(performance.now());});
 addEventListener('focus',()=>{backgrounded=false;frameClock.reset(performance.now());});
-addEventListener('blur',()=>{backgrounded=true;frameClock.reset();areaPress=false;resetStick();keys.clear();clearAreaReadiness();guardAlert.stop();});document.addEventListener('visibilitychange',()=>{areaPress=false;resetStick();keys.clear();if(document.hidden){clearAreaReadiness();guardAlert.stop();storage.write();}frameClock.reset(performance.now());});addEventListener('pagehide',event=>{storage.write();guardAlert.stop();if(!event.persisted)void guardAlert.dispose();});
+addEventListener('blur',()=>{view?.pauseWeaponSound?.(true);backgrounded=true;frameClock.reset();areaPress=false;resetStick();keys.clear();clearAreaReadiness();guardAlert.stop();});document.addEventListener('visibilitychange',()=>{areaPress=false;resetStick();keys.clear();if(document.hidden){view?.pauseWeaponSound?.(true);clearAreaReadiness();guardAlert.stop();storage.write();}frameClock.reset(performance.now());});addEventListener('pagehide',event=>{storage.write();guardAlert.stop();if(!event.persisted)void guardAlert.dispose();});
 function frame(now){
   requestAnimationFrame(frame);
   const simulating=active&&!!view&&!paused&&!backgrounded&&!pageFrozen&&!document.hidden&&$('loading').hidden&&(!isTour(state)||view.art?.readyForMovement),dt=frameClock.sample(now,simulating);
   if(!active||!view)return;
+  view.pauseWeaponSound?.(paused||backgrounded||pageFrozen||document.hidden);
   if(simulating){
     let x=stick.x,y=stick.y;if(keys.size){x=(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0);y=(keys.has('s')||keys.has('arrowdown')?1:0)-(keys.has('w')||keys.has('arrowup')?1:0);}
     const n=Math.max(1,Math.hypot(x,y));x/=n;y/=n;
@@ -768,6 +770,7 @@ function renderRealtimeContext(){
 export function inspectRealtime(){
   if(!state?.realtime)return {active:false};
   return {active,paused,ready:!!view&&!view.pending?.size&&!view.failed?.size&&$('loading').hidden,missionId:state.solo.missionId,phase:state.phase,status:state.solo.status,elapsed:state.elapsed,queueLength:state.queue.length,...Core.realtimeStatus(state),
+    lastDischarge:view?.lastDischarge??null,
     player:{x:hero(state).x,y:hero(state).y,hp:hero(state).hp,stance:hero(state).stance,sneaking:hero(state).sneaking,distance:state.solo.distance,ammo:{...hero(state).ammo},stats:{...hero(state).stats}},
     contacts:Core.visibleOpponents(state).map(v=>({id:v.id,name:v.name,hp:v.hp,x:v.x,y:v.y})),guards:state.units.filter(v=>v.team==='guard').map(v=>({id:v.id,x:v.x,y:v.y,hp:v.hp,alert:v.alert,ammo:{...v.ammo},reload:state.realtime.actors[v.id]?.reload,projection:view?.projectWorldPoint?.({...v,h:.9})})),
     objects:Core.interactionObjects(state).map(o=>({id:o.id,kind:o.kind,open:o.open,searched:o.searched,x:o.x,y:o.y})),shaderFailures:view?.renderer?.info.programs.filter(p=>p.diagnostics?.runnable===false).length??0};

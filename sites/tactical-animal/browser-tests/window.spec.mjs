@@ -9,7 +9,10 @@ const origin='http://127.0.0.1:4178',output=path.join(root,'artifacts/window-bro
 const flags=['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'];
 const snapshot=page=>page.evaluate(async()=>{const entry=document.querySelector('script[src*="window-yard.js"]').src;return (await import(entry)).inspectWindowYard();});
 const project=(page,point)=>page.evaluate(async point=>{const entry=document.querySelector('script[src*="window-yard.js"]').src;return (await import(entry)).projectWindowYard(point);},point);
-const starts=probe=>probe.audio.reduce((n,context)=>n+context.starts.length,0);
+const glassPath=path.join(root,'sites/tactical-animal/dist/assets/audio/glass-smash-rubberduck-cc0.ogg');
+const glassBytes=(await fs.stat(glassPath)).size;
+const starts=probe=>probe.audio.reduce((n,context)=>n+context.starts.filter(voice=>
+  context.decoded.some(clip=>clip.bytes===glassBytes&&clip.duration===voice.duration)).length,0);
 const pane=(state,id,pane='r0c0')=>state.assets.find(a=>a.id===id)?.panes.find(p=>p.id===pane)?.visible;
 function capturePage(page,name,report){const log={name,console:[],errors:[],requests:[]};report.pages.push(log);page.on('console',m=>{if(['error','warning'].includes(m.type())&&log.console.length<1000)log.console.push({type:m.type(),text:m.text()});});page.on('pageerror',e=>log.errors.push(String(e.stack||e)));page.on('requestfailed',r=>log.requests.push({url:r.url(),failure:r.failure()?.errorText}));page.on('response',r=>{if(r.status()>=400)log.requests.push({url:r.url(),status:r.status()});});}
 async function shot(page,name){await page.screenshot({path:path.join(output,name+'.png'),fullPage:true});}
@@ -66,7 +69,7 @@ test('actual window editor and FieldView compile shaders, pick, break, persist a
     for(const probe of [report.editorProbe,report.fieldProbe]){expect(probe.shaders.length).toBeGreaterThan(0);expect(probe.links.length).toBeGreaterThan(0);expect(probe.shaders.filter(p=>!p.ok)).toEqual([]);expect(probe.links.filter(p=>!p.ok)).toEqual([]);}
     const decoded=report.fieldProbe.audio.flatMap(a=>a.decoded);expect(decoded.length).toBeGreaterThan(0);expect(decoded.every(a=>a.rms>0&&a.peak>0&&a.duration>0)).toBe(true);expect(report.fieldProbe.audio.flatMap(a=>a.starts).every(a=>a.state==='running'&&a.userGestureSeen)).toBe(true);expect(report.fieldProbe.audio.flatMap(a=>a.errors)).toEqual([]);
     const recording=await game.evaluate(()=>window.__windowNativeProbe.finishAudio());report.recordings=[];for(const item of recording){if(!item.starts||!item.bytes)continue;const file=`native-audio-${item.index}.webm`;await fs.writeFile(path.join(output,file),Buffer.from(item.base64,'base64'));report.recordings.push({file,mime:item.mime,bytes:item.bytes,starts:item.starts});}
-    report.audioFileSha256=createHash('sha256').update(await fs.readFile(path.join(root,'sites/tactical-animal/dist/assets/audio/glass-smash-rubberduck-cc0.ogg'))).digest('hex');report.checks.push('Actual CC0 audio decoded with nonzero samples; three native source starts for three breaks after gesture; digital output captured where supported');
+    report.audioFileSha256=createHash('sha256').update(await fs.readFile(glassPath)).digest('hex');report.checks.push('Actual CC0 audio decoded with nonzero samples; three native source starts for three breaks after gesture; digital output captured where supported');
     for(const log of report.pages){expect(log.errors,JSON.stringify(log)).toEqual([]);expect(log.console.filter(m=>m.type==='error'),JSON.stringify(log)).toEqual([]);expect(log.requests.filter(r=>r.status||r.failure!=='net::ERR_ABORTED'),JSON.stringify(log)).toEqual([]);}report.passed=true;
   }catch(error){report.failure=String(error.stack||error);for(const [name,page]of [['editor-failure',editor],['field-failure',game]])if(page&&!page.isClosed())await shot(page,name).catch(()=>{});throw error;
   }finally{

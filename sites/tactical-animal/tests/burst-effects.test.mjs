@@ -87,3 +87,15 @@ test('legacy single-shot effects and grenade arcs keep their existing duration a
   assert.equal(view.effects.length,2);assert.equal(view.effects[0].line.geometry.attributes.position.count,33);
   assert.ok(view.effects.every(effect=>effect.at===2000&&effect.ttl===700));view.animateEffects(2700);assert.equal(view.effects.length,0);
 });
+
+test('a slow frame plays each burst report once while independent shooters can fire together',()=>{
+  const view=layer(),calls=[];
+  view.state=ready().state;view.weaponAudio={setCamera(){},play(id){calls.push(id);}};
+  const event={weapon:'assault',shooter:0,ax:4,ay:25,bx:10,by:25,hit:false,shot:0,shots:2};
+  const reply={...event,weapon:'pistol',shooter:1,shot:0,shots:1,catchupDelayMs:50};
+  view.queueEffects({sequence:[event,{...event,shot:1},reply]},0);
+  view.animateEffects(0);view.animateEffects(1);
+  assert.deepEqual(calls,['ak47-shot']);
+  view.animateEffects(200);view.animateEffects(201);
+  assert.deepEqual(calls,['ak47-shot','ak47-shot','tt33']);
+});

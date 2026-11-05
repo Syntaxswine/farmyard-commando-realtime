@@ -50,9 +50,14 @@ export class SoloFlameEffects {
   constructor(scene,{loadTexture=url=>new T.TextureLoader().loadAsync(url),reducedMotion=()=>typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches,onError=error=>console.warn('Flamethrower artwork unavailable; combat continues.',error)}={}){
     Object.assign(this,{scene,loadTexture,reducedMotion,onError,queue:[],slots:[],texture:null,status:'idle',generation:0,disposed:false,now:0});
   }
-  enqueue(event,now){
+  enqueue(event,now,{recordedMuzzle=false}={}){
     if(this.disposed||!event.flame?.sourceVisible||this.status==='failed'||this.queue.length>=FLAME_LIMITS.queued)return false;
-    this.queue.push({event,shape:event.flame,queuedAt:now,elapsed:0,last:null,shown:false,tailShown:false,muzzle:null,slot:null});
+    const shape=event.flame,{x,y,h}=shape.origin;
+    // A real-time operator may already be moving when the renderer receives
+    // the shot. Start at the recorded cone and prefer its fitted live muzzle.
+    const reach=Math.min(.42,shape.rays[18].distance*.5);
+    const muzzle=recordedMuzzle?V(x+Math.cos(shape.heading)*reach,h,y+Math.sin(shape.heading)*reach):null;
+    this.queue.push({event,shape,queuedAt:now,elapsed:0,last:null,shown:false,tailShown:false,muzzle,recordedMuzzle,slot:null});
     if(this.status==='idle'){this.loadAt=now;this.load();}return true;
   }
   load(){
@@ -69,7 +74,7 @@ export class SoloFlameEffects {
       // A disappeared operator/model cannot retain an unstarted presentation
       // forever. Real texture failures are handled independently above.
       if(!entry.muzzle&&now-entry.queuedAt>5000){this.release(entry);continue;}
-      if(this.status!=='ready')continue;
+      if(this.status!=='ready'||now<entry.queuedAt)continue;
       if(!entry.slot){
         let slot=this.slots.find(slot=>!slot.owner);
         if(!slot&&this.slots.length<FLAME_LIMITS.active){slot=makeSlot(this.scene,this.texture);this.slots.push(slot);}
@@ -91,7 +96,7 @@ export class SoloFlameEffects {
     if(!result?.origin||!result.origin.toArray().every(Number.isFinite))return;
     const source=fire.entry.shape.source;if(!this.queue.includes(fire.entry))return;
     for(const entry of this.queue){const other=entry.shape.source;
-      if(other.id===source.id&&other.stance===source.stance&&other.heading===source.heading&&other.x===source.x&&other.y===source.y&&(!entry.muzzle||entry.elapsed<FIRE_TIME.ignite))entry.muzzle=result.origin.clone();
+      if(other.id===source.id&&other.stance===source.stance&&other.heading===source.heading&&other.x===source.x&&other.y===source.y&&(!entry.muzzle||entry.elapsed<FIRE_TIME.ignite)&&(!entry.recordedMuzzle||flameMuzzleInReach(entry.shape,{x:result.origin.x,y:result.origin.z})))entry.muzzle=result.origin.clone();
     }
   }
   release(entry){

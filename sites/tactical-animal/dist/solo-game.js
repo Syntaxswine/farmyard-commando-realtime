@@ -453,13 +453,29 @@ export function previewPointAttack(s,a,point,burst=false,aimLevel='hip'){
   else if(combatCosts(s)&&a.ap+EPS<aim.cost)reason='Not enough AP';
   return {ok:!reason,reason,cost:s.realtime?0:aim?.cost??0,rounds,distance:d,cover:0,chance:Math.round(Math.max(5,Math.min(95,weaponAccuracy(a)+(w?.accuracy||0)-(w?.rangeLoss||0)*d/(w?.range||1)+(aim?.accuracy||0))))};
 }
+const shotHeight=(point,zone)=>point.ground?point.h:zone==='head'?bodyHeight(point):zone==='legs'?bodyHeight(point)*.25:bodyHeight(point)*.62;
+function firstShotObstacle(s,a,b,source,end){
+  let obstacle=null;
+  for(const box of geometryNear(s,a,b,0,'air')){
+    const span=airSpan(a,b,source,end,box);
+    if(!span||span[0]<=EPS||span[0]>=(obstacle?.t??1+EPS))continue;
+    const t=span[0];
+    obstacle={box,t,point:{x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t,h:source+(end-source)*t}};
+  }
+  return obstacle;
+}
+
+function missedTrace(s,a,b,event){
+  const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||1;
+  const side=event.shot%2?.36:-.36;
+  const end={x:b.x-dy/d*side,y:b.y+dx/d*side,h:event.bh+.16};
+  return firstShotObstacle(s,a,end,event.ah,end.h)?.point??end;
+}
+
 export function confirmedImpact(s,a,b,zone='torso'){
   const dx=b.x-a.x,dy=b.y-a.y,length2=dx*dx+dy*dy,source=eyeHeight(a),height=bodyHeight;
-  const end=b.ground?b.h:zone==='head'?height(b):zone==='legs'?height(b)*.25:height(b)*.62,dh=end-source;
-  let blocked=1+EPS,obstacle=null;
-  for(const box of geometryNear(s,a,b,0,'air')){
-    const span=airSpan(a,b,source,end,box);if(span&&span[0]>EPS&&span[0]<blocked){blocked=span[0];obstacle={box,t:blocked,point:{x:a.x+dx*blocked,y:a.y+dy*blocked,h:source+dh*blocked}};}
-  }
+  const end=shotHeight(b,zone),dh=end-source;
+  const obstacle=firstShotObstacle(s,a,b,source,end),blocked=obstacle?.t??1+EPS;
   return s.units.filter(u=>alive(u)&&u.id!==a.id).map(unit=>{
     const t=length2?((unit.x-a.x)*dx+(unit.y-a.y)*dy)/length2:1,h=source+dh*t;
     if(t<=0||t>1+EPS||t>blocked||h<0||h>height(unit)||Math.hypot(unit.x-a.x-dx*t,unit.y-a.y-dy*t)>RADIUS)return null;
@@ -475,10 +491,10 @@ function attackNow(s,a,b,burst=false,byAI=false,zone='torso',reaction=false,aimL
   const hp=b.hp??0,sequence=[];let hits=0;
   for(let round=0;round<p.rounds&&alive(a)&&!a.burningTurns;round++){
     if(w.mag&&!(a.ammo[weapon]>0))break;if(w.mag){a.ammo[weapon]--;syncAmmo(a,weapon);}
-    const fireBefore=s.fireAnimationSequence||0,windowBefore=s.windowSequence||0,event={shooter:a.id,target:b.id,ax:a.x,ay:a.y,bx:b.x,by:b.y,incendiary:w.incendiary,hit:false,weapon,shot:round,explosions:[]};sequence.push(event);
+    const fireBefore=s.fireAnimationSequence||0,windowBefore=s.windowSequence||0,event={shooter:a.id,target:b.id,ax:a.x,ay:a.y,ah:eyeHeight(a),bx:b.x,by:b.y,bh:shotHeight(b,zone),sourceVisible:a.team==='squad'||s.detected.has(a.id),incendiary:w.incendiary,hit:false,weapon,shot:round,explosions:[]};sequence.push(event);
     if(w.incendiary){event.flame=recordFlame(a,w.range,geometryNear(s,a,a,w.range,'flame'),s.visible);event.impacts=resolveFlame(s,a,event);event.hit=event.impacts.length>0;}
     else if(w.blast){
-      const impact=confirmedImpact(s,a,b,zone),origin=impact?.box?.windowPart?impact.point:b;event.bx=origin.x;event.by=origin.y;
+      const impact=confirmedImpact(s,a,b,zone),origin=impact?.box?.windowPart?impact.point:b;event.bx=origin.x;event.by=origin.y;event.bh=origin.h??event.bh;
       for(const victim of s.units.filter(alive))if(alive(victim)&&distance(victim,origin)<=w.blast&&lineClear(s,origin,victim)){if(!detonateImpact(s,a,victim,'torso',w,event))hurt(s,victim,Math.round(w.damage*Math.max(.2,1-distance(victim,origin)/(w.blast+1))));event.hit=true;}
       windowBlast(s,origin,w.blast);
     }else{
@@ -487,9 +503,9 @@ function attackNow(s,a,b,burst=false,byAI=false,zone='torso',reaction=false,aimL
         if(impact.box.kind==='glass'){const record=windowSystem.compile(s).find(r=>r.placement.id===impact.box.windowId),local=windowToLocal(record.placement,{...a,h:eyeHeight(a)});
           const broken=windowSystem.breakPane(s,impact.box.windowId,impact.box.paneId,impact.point,{cause:w.mag?'bullet':'melee',direction:local[2]<0?1:-1});if(broken){geometryCache.delete(s);event.glass=true;}
         }
-      }else if(impact?.unit){const victim=impact.unit;event.hit=true;event.impact={unitId:victim.id,zone:impact.zone};event.bx=victim.x;event.by=victim.y;
+      }else if(impact?.unit){const victim=impact.unit;event.hit=true;event.impact={unitId:victim.id,zone:impact.zone};event.bx=victim.x;event.by=victim.y;event.bh=shotHeight(victim,impact.zone);
         if(!detonateImpact(s,a,victim,impact.zone,w,event))hurt(s,victim,Math.round((w.pellets?w.damage*w.pellets*.48:w.damage)*(AIM_ZONES[impact.zone]?.damage||1)));
-      }
+      }else if(w.mag)event.traceEnd=missedTrace(s,a,b,event);
     }
     event.windowSequences=windowReceipts(s,windowBefore);event.fireSequences=(s.fireAnimations||[]).filter(e=>e.sequence>fireBefore).map(e=>e.sequence);if(event.hit)hits++;
   }

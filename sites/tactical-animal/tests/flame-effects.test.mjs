@@ -25,6 +25,18 @@ test('the first shot waits for one lazy atlas load, then remains visible through
   assert.equal(requests,1);assert.equal(encodeSave(state),before);layer.dispose();assert.equal(scene.children.length,0);
 });
 
+test('a committed real-time cone still renders after the operator moves away',async()=>{
+  const {state,unit,event}=shot(),layer=new SoloFlameEffects(new T.Scene(),{loadTexture:async()=>new T.Texture()});
+  layer.enqueue(event,100,{recordedMuzzle:true});
+  await layer.pending;
+  unit.x+=1;unit.isMoving=true;
+  frame(layer,state,0);assert.equal(layer.slots.length,0);
+  frame(layer,state,100);frame(layer,state,660);
+  assert.equal(layer.poseFor(unit),null);
+  assert.ok(layer.slots[0].group.visible&&layer.slots[0].sheets.some(mesh=>mesh.visible));
+  layer.dispose();
+});
+
 test('mask updates can hide ground during playback without finding victims or moving any actor',async()=>{
   const {state,unit,event}=shot(),layer=new SoloFlameEffects(new T.Scene(),{loadTexture:async()=>new T.Texture()}),before=encodeSave(state);
   layer.enqueue(event,0);capture(layer,unit);await layer.pending;frame(layer,state,0);frame(layer,state,560);
