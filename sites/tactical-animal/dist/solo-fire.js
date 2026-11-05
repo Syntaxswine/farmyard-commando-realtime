@@ -7,10 +7,10 @@ export function recordBurn(s,u,kind,route=[firePoint(u)]){
   const event={sequence:s.fireAnimationSequence=(s.fireAnimationSequence||0)+1,unitId:u.id,kind,weapon:u.weapon,route};
   (s.fireAnimations??=[]).push(event);s.fireAnimations=s.fireAnimations.slice(-128);return event;
 }
-export function createFireRules({kill,walkSegment,random,key,log}){
+export function createFireRules({kill,walkSegment,random,key,log,onIgnite=()=>{}}){
   function ignite(s,u){
     if(!u||u.hp<=0||u.burningTurns>0)return false;
-    u.burningTurns=3;u.ap=0;u.stance='standing';u.running=u.sneaking=u.isMoving=false;
+    onIgnite(s,u);u.burningTurns=3;u.ap=0;u.stance='standing';u.running=u.sneaking=u.isMoving=false;
     u.alert=true;s.queue=[];s.panicDelay=3;recordBurn(s,u,'ignite');log(s,u.name+' is on fire / 3 panic turns.');return true;
   }
   function enterFire(s,u){if(s.fires?.some(p=>p.turns>0&&key(p.x,p.y)===key(u.x,u.y)))return ignite(s,u);return false;}

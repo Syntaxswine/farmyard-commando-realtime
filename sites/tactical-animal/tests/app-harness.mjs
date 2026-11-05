@@ -14,9 +14,11 @@ import * as guardAlerts from '../dist/guard-alert.js';
 import {selectInteractionTarget} from '../dist/interactions.js';
 import {createOperationStorage} from '../dist/operation-storage.js';
 import {STANCE_ICONS} from '../dist/aft/tactics/battle-control-icons.js';
+import * as realtimeCombat from '../dist/realtime-combat.js';
+import {createRealtimeCareers} from '../dist/realtime-progression.js';
 
 // Actual application handlers and simulation with a lightweight DOM/renderer.
-export function app({autoDeploy=true,initialStorage=[],storageFailure=null,search='',initialState=null}={}){
+export function app({autoDeploy=true,initialStorage=[],storageFailure=null,search='',initialState=null,realTime=false}={}){
   const elements=new Map(),events=new Map(),documentEvents=new Map(),saved=new Map(initialStorage),views=[];let animation,clock=0;
   class Element {
     constructor(id=''){
@@ -42,6 +44,7 @@ export function app({autoDeploy=true,initialStorage=[],storageFailure=null,searc
   }
   const el=id=>{if(!elements.has(id))elements.set(id,new Element(id));return elements.get(id);};
   const doc={getElementById:el,querySelector:el,createElement:tag=>Object.assign(new Element(),{tagName:tag}),createElementNS:(_namespace,tag)=>Object.assign(new Element(),{tagName:tag}),body:new Element(),hidden:false,addEventListener:(name,fn)=>documentEvents.set(name,fn)};
+  doc.body.dataset.realtime=String(realTime);
   class FieldView {
     constructor(_container,options){this.options=options;this.follow=true;views.push(this);}
     setGame(state){this.state=state;this.art=state.solo.missionId===tourActivity.TOUR_ID?{readyForMovement:true}:null;this.options.onLoading(false);}
@@ -56,7 +59,7 @@ export function app({autoDeploy=true,initialStorage=[],storageFailure=null,searc
     route(){} center(){} sync(){} dispose(){this.disposed=true;this.aiming=false;}
   }
   if(!saved.has('tactical-animal-build-v1'))saved.set('tactical-animal-build-v1',JSON.stringify({...game.DEFAULT_BUILD,utility:'grenade'}));
-  const context={...game,FrameClock,pointInWorldRect,...tourActivity,...tourProgress,URL,URLSearchParams,AbortController,Image:class {complete=false;naturalWidth=0;},location:{search},__appModuleURL:new URL('../dist/app.js',import.meta.url).href,...controls,...grenadeControls,...flameControls,...shootingControls,...guardAlerts,createTargetMonitor:(...args)=>targetMonitor.createTargetMonitor(...args,doc),selectInteractionTarget,createOperationStorage,STANCE_ICONS,weaponArtwork:()=>new Element(),FieldView,drawMinimap(){},document:doc,localStorage:{getItem:key=>saved.get(key),setItem:(key,value)=>saved.set(key,value)},setTimeout,clearTimeout,performance:{now:()=>clock},requestAnimationFrame:fn=>animation=fn,innerHeight:844,addEventListener:(name,fn)=>events.set(name,fn),console};
+  const context={...game,...realtimeCombat,createRealtimeCareers,FrameClock,pointInWorldRect,...tourActivity,...tourProgress,URL,URLSearchParams,AbortController,Image:class {complete=false;naturalWidth=0;},location:{search},__appModuleURL:new URL('../dist/app.js',import.meta.url).href,...controls,...grenadeControls,...flameControls,...shootingControls,...guardAlerts,createTargetMonitor:(...args)=>targetMonitor.createTargetMonitor(...args,doc),selectInteractionTarget,createOperationStorage,STANCE_ICONS,weaponArtwork:()=>new Element(),FieldView,drawMinimap(){},document:doc,localStorage:{getItem:key=>saved.get(key),setItem:(key,value)=>saved.set(key,value)},setTimeout,clearTimeout,performance:{now:()=>clock},requestAnimationFrame:fn=>animation=fn,innerHeight:844,addEventListener:(name,fn)=>events.set(name,fn),console};
   context.window={get localStorage(){return context.localStorage;}};
   if(storageFailure){
     const blocked=()=>{throw Object.assign(new Error('Storage access is denied.'),{name:'SecurityError'});};

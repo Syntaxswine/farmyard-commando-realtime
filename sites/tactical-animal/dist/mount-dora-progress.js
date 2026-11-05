@@ -28,7 +28,7 @@ export function encodeTourProgress(state,world){
   const u=state.units.find(u=>u.team==='squad');
   return JSON.stringify({kind:'farmyard-mount-dora-tour',version:1,sourceRevision:world.sourceRevision,sourceDigest:world.project.generation.sourceDigest,artRevision:world.artRevision,
     build:{...state.solo.build},player:{...u,isMoving:false},dressings:state.solo.dressings,distance:state.solo.distance,elapsed:state.elapsed,explored:state.seen.snapshot(),log:state.log.slice(0,20),
-    runtime:{phase:state.phase,round:state.round,seed:state.seed,engaged:!!state.engaged,status:state.solo.status,enemyIndex:state.enemyIndex,enemyDelay:state.enemyDelay,panicDelay:state.panicDelay,fires:state.fires||[],areaWeapon:state.solo.areaWeapon,
+    runtime:{realtime:state.realtime,phase:state.phase,round:state.round,seed:state.seed,engaged:!!state.engaged,status:state.solo.status,enemyIndex:state.enemyIndex,enemyDelay:state.enemyDelay,panicDelay:state.panicDelay,fires:state.fires||[],areaWeapon:state.solo.areaWeapon,
       objects:state.interactables.map(({id,open,searched,inventory})=>({id,open,searched,inventory}))}});
 }
 export function readTourProgress(text){

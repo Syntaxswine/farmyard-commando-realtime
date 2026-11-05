@@ -19,7 +19,7 @@ function controls(){if(!api?.document)return;const selected=selectedWindow(api.d
 async function edit(fn){try{if(api.loading)throw Error('Wait for the designer to finish loading.');api.document.replace(fn(api.document.map));await api.changed();controls();status('Window placement updated. Export, undo and redo use the designer’s existing controls.');}catch(e){status(e.message);}}
 $('place').onclick=()=>edit(map=>placeWindow(map,api.selection,$('definition').value,{finish:$('finish').value,dimensions:dimensions()}));
 $('remove').onclick=()=>edit(map=>removeWindow(map,selectedWindow(map,api.selection)?.id));
-$('playtest').onclick=()=>{try{const source=JSON.parse(api.export());adaptAftSector(source);localStorage.setItem('farmyard-window-authored-map',JSON.stringify(source));window.open('window-yard.html?authored=1','_blank','noopener');}catch(e){status('Playtest: '+e.message);}};
+$('playtest').onclick=()=>{try{const source=JSON.parse(api.export());adaptAftSector(source);localStorage.setItem('farmyard-window-authored-map',JSON.stringify(source));window.open('window-yard.html?authored=1'+(new URLSearchParams(globalThis.location?.search||'').get('rules')==='turn-based'?'&rules=turn-based':''),'_blank','noopener');}catch(e){status('Playtest: '+e.message);}};
 $('review').onclick=async()=>{try{if(!api)throw Error('The 3D designer needs WebGL before it can open the proving yard.');await api.open(JSON.stringify(windowReviewSource()));controls();status('Proving yard loaded in the designer. Select a wall to place a window, or Playtest map.');}catch(e){status(e.message);}};
 function connect(){
   releaseControls?.();clear();library?.dispose();api=null;

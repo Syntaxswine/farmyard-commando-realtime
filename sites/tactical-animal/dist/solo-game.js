@@ -1,3 +1,4 @@
+import {createRealtimeRules,validateRealtime,awardRealtimeKill,shotSeconds,grenadeSeconds} from './realtime-combat.js';
 import {boundedElapsed,SIMULATION_STEP_SECONDS} from './frame-timing.js';
 import {TOUR_ID,getTourWorld,bindTourWorld,isTour} from './mount-dora-activity.js';
 import {encodeTourProgress} from './mount-dora-progress.js';
@@ -19,7 +20,7 @@ import {createFuelRules,tankExplosionChance} from './solo-fuel.js';
 export {tankExplosionChance} from './solo-fuel.js';
 import {gridDimensions,worldBounds} from './world-grid.js';
 import {DEFAULT_MISSION_ID,getMission,missionForState,missionMap,objectiveSecured} from './missions.js';
-export {MISSIONS,DEFAULT_MISSION_ID,getMission,missionForState,missionMap,objectiveSecured,missionDestination} from './missions.js';
+export {MISSIONS,FIRST_REALTIME_MISSION,DEFAULT_MISSION_ID,getMission,missionForState,missionMap,objectiveSecured,missionDestination} from './missions.js';
 
 // Continuous positions are authoritative. Raster cells describe scenery and fog;
 // movement, AP, sightlines, and weapon range use actual world distances.
@@ -37,8 +38,8 @@ export const hero=s=>s.units.find(u=>u.team==='squad');
 export const alive=u=>!!u&&u.hp>0;
 export const movementModeOf=u=>u.sneaking?'sneak':u.running?'run':'walk';
 export const movementRate=u=>(u.stance==='prone'?8:u.stance==='kneeling'?4:2)*(u.running?.5:u.sneaking?1.5:1);
-export const movementSpeed=u=>(u.stance==='prone'?1.8:u.stance==='kneeling'?3.6:7.2)*(u.running?2:u.sneaking?.5:1);
-export const combatCosts=s=>['player','enemy'].includes(s.phase)||s.units.some(g=>g.team==='guard'&&alive(g)&&g.alert);
+export const movementSpeed=u=>u.realtimeMovement?(u.stance==='prone'?3.6:u.stance==='kneeling'?7.2:14.4)*(u.sneaking?.5:1):(u.stance==='prone'?1.8:u.stance==='kneeling'?3.6:7.2)*(u.running?2:u.sneaking?.5:1);
+export const combatCosts=s=>!s.realtime&&(['player','enemy'].includes(s.phase)||s.units.some(g=>g.team==='guard'&&alive(g)&&g.alert));
 export const canControl=(s,u)=>alive(u)&&!u.burningTurns&&u.team==='squad'&&['explore','player','won'].includes(s.phase)&&s.solo.status==='active';
 export function validBuild(b){return !!b&&ANIMALS.some(a=>a.id===b.animal)&&PRIMARY.includes(b.primary)&&SECONDARY.includes(b.secondary)&&UTILITIES.includes(b.utility);}
 export function normalizeBuild(b){return validBuild(b)?{animal:b.animal,primary:b.primary,secondary:b.secondary,utility:b.utility}:{...DEFAULT_BUILD};}
@@ -227,6 +228,7 @@ export function refresh(s,{forceFog=false}={}){
   else if(!s.fogAt||distance(u,s.fogAt)>.25||forceFog)visibility(s);
   if(!alive(u)){s.phase='lost';s.solo.status='lost';s.queue=[];u.isMoving=false;s.revision++;return;}
   const guards=s.units.filter(g=>g.team==='guard'&&alive(g));
+  if(s.realtime){s.phase=!guards.length&&!firePending(s)&&!missionForState(s).exploration?'won':'explore';s.revision++;return;}
   // An open-ended activity has no victory objective; actions still enter the
   // same AP, enemy-turn, injury and fire lifecycle as every other operation.
   if(!guards.length&&!firePending(s)&&!missionForState(s).exploration){if(s.phase!=='won')s.queue=[];s.phase='won';}
@@ -242,7 +244,7 @@ export function stop(s){s.queue=[];hero(s).isMoving=false;s.revision++;}
 // minimum 300s continuous-run budget and recovery while stationary.
 // Swept-disc collision prevents tunnelling. AP charges accepted displacement,
 // including wall slides, rather than requested input or pathfinder cells.
-export function travel(s,u,dx,dy,{enemy=false}={}){if((enemy?s.phase!=='enemy'||u.burningTurns:!canControl(s,u))||!Number.isFinite(dx)||!Number.isFinite(dy))return 0;const requested=Math.hypot(dx,dy);if(requested<EPS)return 0;const rate=movementRate(u),spends=enemy||s.phase==='player';const budget=Math.min(requested,spends?u.ap/rate:Infinity);if(budget<EPS){u.isMoving=false;return 0;}const steps=Math.ceil(budget/.07),sx=dx/requested*budget/steps,sy=dy/requested*budget/steps;let walked=0;for(let i=0;i<steps;i++){let nx=u.x+sx,ny=u.y+sy;if(!freePoint(s,{x:nx,y:ny},u.id)){if(freePoint(s,{x:nx,y:u.y},u.id))ny=u.y;else if(freePoint(s,{x:u.x,y:ny},u.id))nx=u.x;else break;}const d=Math.hypot(nx-u.x,ny-u.y);if(d<EPS)break;u.heading=Math.atan2(ny-u.y,nx-u.x)*180/Math.PI;u.x=nx;u.y=ny;walked+=d;if(spends)u.ap=Math.max(0,u.ap-d*rate);u.travelled+=d;fireRules.enterFire(s,u);if(u.burningTurns)break;}u.isMoving=walked>EPS&&!u.burningTurns;if(walked){if(u.team==='squad'){s.solo.distance+=walked;if(spends)s.solo.apDistance+=walked*rate;}refresh(s);}return walked;}
+export function travel(s,u,dx,dy,{enemy=false}={}){if((enemy?(!s.realtime&&s.phase!=='enemy')||!alive(u)||u.burningTurns:!canControl(s,u))||!Number.isFinite(dx)||!Number.isFinite(dy))return 0;const requested=Math.hypot(dx,dy);if(requested<EPS)return 0;const rate=movementRate(u),spends=!s.realtime&&(enemy||s.phase==='player');const budget=Math.min(requested,spends?u.ap/rate:Infinity);if(budget<EPS){u.isMoving=false;return 0;}const steps=Math.ceil(budget/.07),sx=dx/requested*budget/steps,sy=dy/requested*budget/steps;let walked=0;for(let i=0;i<steps;i++){let nx=u.x+sx,ny=u.y+sy;if(!freePoint(s,{x:nx,y:ny},u.id)){if(freePoint(s,{x:nx,y:u.y},u.id))ny=u.y;else if(freePoint(s,{x:u.x,y:ny},u.id))nx=u.x;else break;}const d=Math.hypot(nx-u.x,ny-u.y);if(d<EPS)break;u.heading=Math.atan2(ny-u.y,nx-u.x)*180/Math.PI;u.x=nx;u.y=ny;walked+=d;if(spends)u.ap=Math.max(0,u.ap-d*rate);u.travelled+=d;fireRules.enterFire(s,u);if(u.burningTurns)break;}u.isMoving=walked>EPS&&!u.burningTurns;if(walked){if(u.team==='squad'){s.solo.distance+=walked;if(spends)s.solo.apDistance+=walked*rate;}refresh(s);}return walked;}
 // A stable heap preserves tie order without sorting the whole frontier on every
 // expansion. The cap also bounds an unreachable request in a large open sector.
 export const NAVIGATION_NODE_LIMIT=8192;
@@ -302,7 +304,7 @@ export function navigationPath(s,u,x,y){
 }
 export function move(s,u,x,y){if(!canControl(s,u))return false;const path=navigationPath(s,u,x,y);if(!path?.length)return false;s.queue=path;s.revision++;return true;}
 export function turnTo(s,u,heading){if(!canControl(s,u)||!Number.isFinite(heading))return false;u.heading=heading;refresh(s);return true;}
-export function setMovementMode(s,u,mode){if(!canControl(s,u)||!['run','sneak','walk'].includes(mode))return false;u.running=mode==='run';u.sneaking=mode==='sneak';s.revision++;return true;}
+export function setMovementMode(s,u,mode){if(!canControl(s,u)||!['run','sneak','walk'].includes(mode))return false;u.running=s.realtime?mode!=='sneak':mode==='run';u.sneaking=mode==='sneak';s.revision++;return true;}
 export function setStance(s,u,stance){if(!canControl(s,u)||!['standing','kneeling','prone'].includes(stance)||u.stance===stance)return false;u.stance=stance;refresh(s,{forceFog:true});return true;}
 const random=s=>{s.seed=(Math.imul(s.seed,1664525)+1013904223)>>>0;return s.seed/4294967296;};
 export const grenadeCost=u=>WEAPONS.grenade.cost*(['pistol','pistol-offhand','smg'].includes(u.weapon)?.5:1);
@@ -331,9 +333,10 @@ export function grenadeBlastFootprint(s,point){
   });
 }
 export function previewGrenade(s,u,point){
-  const w=WEAPONS.grenade,cost=grenadeCost(u),valid=point&&Number.isFinite(point.x)&&Number.isFinite(point.y),d=valid?distance(u,point):Infinity;
+  const w=WEAPONS.grenade,cost=s.realtime?0:grenadeCost(u),valid=point&&Number.isFinite(point.x)&&Number.isFinite(point.y),d=valid?distance(u,point):Infinity;
   let reason='';
   if(!canControl(s,u))reason='Wait for your turn';
+  else if(s.realtime&&realtimeRules.busy(s,u))reason=realtimeRules.busy(s,u);
   else if(!(u.ammo.grenade>0))reason='No grenades remaining';
   else if(!valid||!insideWorld(s,point))reason='Choose a point on the field';
   else if(!s.seen.has(key(point.x,point.y)))reason='Choose an explored landing point';
@@ -343,7 +346,8 @@ export function previewGrenade(s,u,point){
   else if(u.ap+EPS<cost)reason='Not enough AP';
   return {ok:!reason,reason,cost,distance:d,blast:w.blast,discounted:cost<w.cost,selfDanger:!!valid&&grenadeAffects(s,point,u)};
 }
-export function throwGrenade(s,u,point){
+export function throwGrenade(s,u,point){return damageAction(s,u,'grenade',()=>{const ok=throwGrenadeNow(s,u,point);if(ok&&s.realtime)realtimeRules.actor(s,u).cooldown=grenadeSeconds(u);return ok;});}
+function throwGrenadeNow(s,u,point){
   const p=previewGrenade(s,u,point);if(!p.ok)return false;
   stop(s);if(s.phase!=='player'){s.engaged=true;refresh(s);}
   u.ap=Math.max(0,u.ap-p.cost);u.ammo.grenade--;syncAmmo(u,'grenade');u.heading=headingTo(u,point);
@@ -357,9 +361,31 @@ export function throwGrenade(s,u,point){
   s.effect={sequence:[{shooter:u.id,ax:u.x,ay:u.y,bx:point.x,by:point.y,hit:hits>0,weapon:'grenade',blast:p.blast,...impactEvent,windowSequences:windowReceipts(s,windowBefore),fireSequences:(s.fireAnimations||[]).filter(e=>e.sequence>fireBefore).map(e=>e.sequence)}]};
   refresh(s);return true;
 }
-export function previewAttack(s,a,b,burst=false,zone='torso',token=null,aimLevel='hip'){if(b?.ground)return previewPointAttack(s,a,b,burst,aimLevel);if(!alive(a)||!alive(b)||a.team===b.team)return {ok:false,reason:'Choose a living opponent'};if(a.weapon==='grenade'){if(!s.detected.has(b.id))return {ok:false,reason:'Target is not visible'};return {...previewGrenade(s,a,b),chance:100,rounds:1,cover:0};}const w=WEAPONS[a.weapon],aim=shotAim(w,aimLevel,burst),cost=aim.cost,d=distance(a,b),rounds=burst&&w.burstRounds?w.burstRounds:1;let reason='';if(a.team==='squad'&&!s.detected.has(b.id))reason='Target is not visible';else if(a.burningTurns)reason='On fire: running in panic';else if(!lineClear(s,a,b)&&!w.arc)reason='Blocked by a wall';else if(d>w.range+EPS)reason='Out of range';else if(w.mag&&(a.ammo[a.weapon]??0)<rounds)reason='Reload first';else if((combatCosts(s)||a.team==='guard')&&a.ap+EPS<cost)reason='Not enough AP';const cover=geometryNear(s,b,b,.9,'walk').some(box=>(box.kind==='crate'||box.cover)&&pointBoxDistance(b,box)<.9&&intersectsBox(a,b,{x0:box.x0-.3,x1:box.x1+.3,y0:box.y0-.3,y1:box.y1+.3}))?20:0;const chance=Math.max(5,Math.min(95,weaponAccuracy(a)+(w.accuracy||0)-(w.rangeLoss||0)*d/w.range+(aim.accuracy||0)+(AIM_ZONES[zone]?.accuracy||0)-cover+(a.stance==='kneeling'?5:a.stance==='prone'?10:0)));return {ok:!reason,reason,cost,chance:Math.round(chance),rounds,distance:d,cover};}
-function kill(s,u){const living=alive(u);u.hp=0;u.ap=0;u.casualty='dead';u.burningTurns=0;u.isMoving=false;interactionRules.registerBody(s,u);if(living)log(s,u.name+' is down.');}
-function hurt(s,u,damage){if(!alive(u))return;u.hp=Math.max(0,u.hp-damageAfterResistance(u,damage));if(!u.hp)kill(s,u);}
+export function previewAttack(s,a,b,burst=false,zone='torso',token=null,aimLevel='hip'){
+  if(b?.ground)return previewPointAttack(s,a,b,burst,aimLevel);
+  if(!alive(a)||!alive(b)||a.team===b.team)return {ok:false,reason:'Choose a living opponent'};
+  if(a.weapon==='grenade'){if(!s.detected.has(b.id))return {ok:false,reason:'Target is not visible'};return {...previewGrenade(s,a,b),chance:100,rounds:1,cover:0};}
+  const w=WEAPONS[a.weapon],aim=w&&shotAim(w,aimLevel,burst);if(!aim)return {ok:false,reason:'Choose an aim level'};
+  const cost=s.realtime?0:aim.cost,d=distance(a,b),requested=burst&&w.burstRounds?w.burstRounds:1,rounds=s.realtime&&w.mag?Math.min(requested,Math.max(1,a.ammo[a.weapon]||0)):requested;
+  let reason='';
+  if(a.team==='squad'&&!s.detected.has(b.id))reason='Target is not visible';
+  else if(a.burningTurns)reason='On fire: running in panic';
+  else if(s.realtime&&realtimeRules.busy(s,a))reason=realtimeRules.busy(s,a);
+  else if(!lineClear(s,a,b)&&!w.arc)reason='Blocked by a wall';
+  else if(d>w.range+EPS)reason='Out of range';
+  else if(w.mag&&(a.ammo[a.weapon]??0)<rounds)reason='Reload first';
+  else if(!s.realtime&&(combatCosts(s)||a.team==='guard')&&a.ap+EPS<cost)reason='Not enough AP';
+  else if(s.realtime&&!w.blast&&!w.incendiary&&confirmedImpact(s,a,b,zone)?.unit?.id!==b.id)reason='Shot blocked by cover';
+  const cover=geometryNear(s,b,b,.9,'walk').some(box=>(box.kind==='crate'||box.cover)&&pointBoxDistance(b,box)<.9&&intersectsBox(a,b,{x0:box.x0-.3,x1:box.x1+.3,y0:box.y0-.3,y1:box.y1+.3}))?20:0;
+  const moving=s.realtime&&a.isMoving,aimBonus=(aim.accuracy||0)*(moving?.4:1);
+  const chance=Math.max(5,Math.min(95,weaponAccuracy(a)+(w.accuracy||0)-(w.rangeLoss||0)*d/w.range+aimBonus+(AIM_ZONES[zone]?.accuracy||0)-cover+(a.stance==='kneeling'?5:a.stance==='prone'?10:0)-(moving?15:0)));
+  return {ok:!reason,reason,cost,chance:Math.round(chance),rounds,distance:d,cover,...s.realtime?{seconds:shotSeconds(a.weapon,aimLevel,burst)}:{}};
+}
+const damageOwners=new WeakMap(),realtimeReceipts=new WeakMap();
+function damageAction(s,u,weapon,action){const previous=damageOwners.get(s);damageOwners.set(s,{id:u.id,weapon,stealth:false});try{return action();}finally{if(previous)damageOwners.set(s,previous);else damageOwners.delete(s);}}
+function markDamageCredit(s,u,stealth=false){const owner=damageOwners.get(s);if(s.realtime&&owner)realtimeRules.actor(s,u).credit={...owner,stealth};}
+function kill(s,u,fromDamage=false){const living=alive(u)||!!s.realtime&&fromDamage,credit=s.realtime?.actors[u.id]?.credit,owner=damageOwners.get(s);if(living&&u.team==='guard')awardRealtimeKill(s,credit&&(!owner||credit.id===owner.id&&credit.weapon===owner.weapon)?credit:owner);u.hp=0;u.ap=0;u.casualty='dead';u.burningTurns=0;u.isMoving=false;interactionRules.registerBody(s,u);if(living)log(s,u.name+' is down.');}
+function hurt(s,u,damage){if(!alive(u))return;const owner=damageOwners.get(s),source=s.units.find(v=>v.id===owner?.id),w=WEAPONS[owner?.weapon];const stealth=!!(s.realtime&&source?.team==='squad'&&source.sneaking&&!u.alert&&!w?.blast&&!w?.incendiary);if(stealth)damage*=1.5;markDamageCredit(s,u,stealth);if(s.realtime&&source&&source.team!==u.team){u.alert=true;u.lastKnown={x:source.x,y:source.y};}u.hp=Math.max(0,u.hp-damageAfterResistance(u,damage));if(!u.hp)kill(s,u,true);}
 function flameAffects(s,a,u,heading){
   const angle=Math.abs(((headingTo(a,u)-heading+540)%360)-180);
   if(!alive(u)||u.id===a.id||distance(a,u)>WEAPONS.flamethrower.range||angle>=24)return false;
@@ -382,16 +408,18 @@ function resolveFlame(s,a,event={explosions:[]}){
 export function previewFlame(s,a,heading){
   const w=WEAPONS.flamethrower,valid=Number.isFinite(heading);let reason='';
   if(!canControl(s,a))reason='Wait for your turn';
+  else if(s.realtime&&realtimeRules.busy(s,a))reason=realtimeRules.busy(s,a);
   else if(a.weapon!=='flamethrower')reason='Equip the flamethrower';
   else if(!valid)reason='Choose a direction';
   else if(!(a.ammo.flamethrower>0))reason='Reload first';
-  else if(a.ap+EPS<w.cost)reason='Not enough AP';
+  else if(!s.realtime&&a.ap+EPS<w.cost)reason='Not enough AP';
   const direction=valid?((heading%360)+360)%360:a.heading;
   const shape=recordFlame({...a,heading:direction},w.range,geometryNear(s,a,a,w.range,'flame'),s.visible);
   const contacts=s.units.filter(u=>(u.team==='squad'||s.detected.has(u.id))&&s.visible.has(key(u.x,u.y))&&flameAffects(s,a,u,direction)).map(u=>({id:u.id,name:u.name,team:u.team}));
-  return {ok:!reason,reason,cost:w.cost,range:w.range,spread:48,heading:direction,shape,contacts};
+  return {ok:!reason,reason,cost:s.realtime?0:w.cost,range:w.range,spread:48,heading:direction,shape,contacts};
 }
-export function fireFlame(s,a,heading){
+export function fireFlame(s,a,heading){return damageAction(s,a,'flamethrower',()=>{const ok=fireFlameNow(s,a,heading);if(ok&&s.realtime)realtimeRules.actor(s,a).cooldown=shotSeconds('flamethrower');return ok;});}
+function fireFlameNow(s,a,heading){
   const p=previewFlame(s,a,heading);if(!p.ok)return false;
   stop(s);if(s.phase!=='player'){s.engaged=true;refresh(s);}
   a.ap=Math.max(0,a.ap-p.cost);a.ammo.flamethrower--;syncAmmo(a,'flamethrower');a.heading=p.heading;
@@ -417,12 +445,13 @@ export function previewPointAttack(s,a,point,burst=false,aimLevel='hip'){
   const placed=point?.windowId!==undefined?windowSystem.compile(s).find(r=>r.placement.id===point.windowId):null,ceiling=placed?.spec.height??2;
   let reason='';
   if(!canControl(s,a))reason='Wait for your turn';
+  else if(s.realtime&&realtimeRules.busy(s,a))reason=realtimeRules.busy(s,a);
   else if(!point?.ground||point.windowId!==undefined&&!placed||![point.x,point.y,point.h].every(Number.isFinite)||point.h<0||point.h>ceiling||!insideWorld(s,point)||!s.seen.has(key(point.x,point.y)))reason='Choose an explored point';
   else if(!w||w.incendiary||a.weapon==='grenade')reason='Use the area weapon controls';
   else if(d>w.range+EPS)reason='Out of range';
   else if(w.mag&&(a.ammo[a.weapon]??0)<rounds)reason='Reload first';
   else if(combatCosts(s)&&a.ap+EPS<aim.cost)reason='Not enough AP';
-  return {ok:!reason,reason,cost:aim?.cost??0,rounds,distance:d,cover:0,chance:Math.round(Math.max(5,Math.min(95,weaponAccuracy(a)+(w?.accuracy||0)-(w?.rangeLoss||0)*d/(w?.range||1)+(aim?.accuracy||0))))};
+  return {ok:!reason,reason,cost:s.realtime?0:aim?.cost??0,rounds,distance:d,cover:0,chance:Math.round(Math.max(5,Math.min(95,weaponAccuracy(a)+(w?.accuracy||0)-(w?.rangeLoss||0)*d/(w?.range||1)+(aim?.accuracy||0))))};
 }
 export function confirmedImpact(s,a,b,zone='torso'){
   const dx=b.x-a.x,dy=b.y-a.y,length2=dx*dx+dy*dy,source=eyeHeight(a),height=bodyHeight;
@@ -437,10 +466,11 @@ export function confirmedImpact(s,a,b,zone='torso'){
     return {unit,t,zone:unit.id===b.id?zone:h>height(unit)*.8?'head':h<height(unit)*.32?'legs':'torso'};
   }).filter(Boolean).sort((a,b)=>a.t-b.t||a.unit.id-b.unit.id)[0]||obstacle;
 }
-export function attack(s,a,b,burst=false,byAI=false,zone='torso',reaction=false,aimLevel='hip'){
-  if(byAI?s.phase!=='enemy'||!alive(a)||a.burningTurns:!canControl(s,a))return false;
+export function attack(s,a,b,burst=false,byAI=false,zone='torso',reaction=false,aimLevel='hip'){if(s.realtime)return realtimeRules.requestShot(s,a,b,burst,zone,aimLevel);return attackNow(s,a,b,burst,byAI,zone,reaction,aimLevel);}
+function attackNow(s,a,b,burst=false,byAI=false,zone='torso',reaction=false,aimLevel='hip'){
+  if(byAI?(!s.realtime&&s.phase!=='enemy')||!alive(a)||a.burningTurns:!canControl(s,a))return false;
   const p=previewAttack(s,a,b,burst,zone,null,aimLevel);if(!p.ok)return false;if(a.weapon==='grenade')return throwGrenade(s,a,b);
-  stop(s);const weapon=a.weapon,w=WEAPONS[weapon];if(!byAI&&s.phase!=='player'){s.engaged=true;refresh(s);}
+  if(!s.realtime)stop(s);const weapon=a.weapon,w=WEAPONS[weapon];if(!s.realtime&&!byAI&&s.phase!=='player'){s.engaged=true;refresh(s);}
   a.ap=Math.max(0,a.ap-p.cost);a.heading=headingTo(a,b);
   const hp=b.hp??0,sequence=[];let hits=0;
   for(let round=0;round<p.rounds&&alive(a)&&!a.burningTurns;round++){
@@ -465,12 +495,13 @@ export function attack(s,a,b,burst=false,byAI=false,zone='torso',reaction=false,
   }
   for(const event of sequence)event.shots=sequence.length;
   log(s,`${a.name} → ${b.name||'window'}: ${b.ground?sequence.some(e=>e.glass)?'glass broken':'shot':hits?Math.round(hp-b.hp)+' damage':'miss'} (${p.chance}%).`);
-  for(const g of s.units.filter(g=>g.team==='guard'&&alive(g)))if(distance(a,g)<=w.range*2){g.alert=true;g.lastKnown={x:a.x,y:a.y};g.alertAge=0;}
+  for(const g of s.units.filter(g=>g.team==='guard'&&alive(g)))if(distance(a,g)<=w.range*2){g.alert=true;g.lastKnown=s.realtime&&a.team==='guard'&&a.lastKnown?{...a.lastKnown}:{x:a.x,y:a.y};g.alertAge=0;}
   s.effect={sequence,cost:p.cost};refresh(s);return true;
 }
-export function equip(s,u,id){if(!canControl(s,u)||!u.pack.some(i=>i.kind===id)||u.weapon===id)return false;const cost=combatCosts(s)?u.slots.includes(id)?2:3:0;if(u.ap+EPS<cost)return false;stop(s);u.ap-=cost;u.weapon=id;log(s,'Equipped '+WEAPONS[id].name+'.');return true;}
-export function reload(s,u){if(!canControl(s,u))return false;const w=WEAPONS[u.weapon],count=Math.min(w.mag-(u.ammo[u.weapon]??0),u.ammoPouch[u.weapon]||0),cost=combatCosts(s)?3:0;if(!count||u.ap+EPS<cost)return false;stop(s);u.ap-=cost;u.ammo[u.weapon]+=count;u.ammoPouch[u.weapon]-=count;syncAmmo(u,u.weapon);log(s,'Reloaded '+count+' rounds.');return true;}
-export function endTurn(s){if(s.phase!=='player'||s.solo.status!=='active')return false;stop(s);for(const unit of s.units)fireRules.panicRun(s,unit);s.phase='enemy';s.enemyIndex=1;s.enemyDelay=.35;s.engaged=false;for(const g of s.units.filter(g=>g.team==='guard')){g.ap=g.burningTurns?0:g.maxAp;g.alertAge++;if(g.alertAge>3&&!canSee(s,g,hero(s)))g.alert=false;}s.revision++;return true;}
+export function equip(s,u,id){if(!canControl(s,u)||!u.pack.some(i=>i.kind===id)||u.weapon===id)return false;const cost=combatCosts(s)?u.slots.includes(id)?2:3:0;if(u.ap+EPS<cost)return false;stop(s);u.ap-=cost;u.weapon=id;if(s.realtime)realtimeRules.changedWeapon(s,u);log(s,'Equipped '+WEAPONS[id].name+'.');return true;}
+export function reload(s,u){return s.realtime?realtimeRules.reload(s,u):reloadNow(s,u);}
+function reloadNow(s,u,real=false){if(real?!alive(u)||u.burningTurns:!canControl(s,u))return false;const w=WEAPONS[u.weapon],count=Math.min(w.mag-(u.ammo[u.weapon]??0),u.ammoPouch[u.weapon]||0),cost=combatCosts(s)?3:0;if(!count||u.ap+EPS<cost)return false;if(!real)stop(s);u.ap-=cost;u.ammo[u.weapon]+=count;u.ammoPouch[u.weapon]-=count;syncAmmo(u,u.weapon);log(s,'Reloaded '+count+' rounds.');return true;}
+export function endTurn(s){if(s.realtime)return false;if(s.phase!=='player'||s.solo.status!=='active')return false;stop(s);for(const unit of s.units)fireRules.panicRun(s,unit);s.phase='enemy';s.enemyIndex=1;s.enemyDelay=.35;s.engaged=false;for(const g of s.units.filter(g=>g.team==='guard')){g.ap=g.burningTurns?0:g.maxAp;g.alertAge++;if(g.alertAge>3&&!canSee(s,g,hero(s)))g.alert=false;}s.revision++;return true;}
 // A guard within ARRIVED of its last waypoint has arrived. A route can also open at
 // its own grid node, inside that distance; it walks on to the next waypoint
 // instead of ending its turn there.
@@ -479,13 +510,13 @@ function enemyStep(s,dt){const u=hero(s);let g=s.units[s.enemyIndex];if(!g){fire
 // Every frame reuses the same movement/turn step; stop catch-up at control-phase changes.
 export function tick(s,dt=1/60,input=null){
   if(s.solo.status!=='active')return false;
-  const seconds=boundedElapsed(dt),steps=Math.max(1,Math.ceil((seconds-1e-9)/SIMULATION_STEP_SECONDS)),receipts=[];let previous=s.effect;
+  const seconds=boundedElapsed(dt),steps=Math.max(1,Math.ceil((seconds-1e-9)/SIMULATION_STEP_SECONDS)),receipts=s.realtime&&s.effect&&realtimeReceipts.get(s)!==s.effect?[{effect:s.effect,at:0}]:[];let previous=s.effect;
   for(let i=0;i<steps;i++){const phase=s.phase;tickStep(s,seconds/steps,input);if(s.effect&&s.effect!==previous){receipts.push({effect:s.effect,at:i*seconds/steps});previous=s.effect;}if(s.phase!==phase||s.solo.status!=='active')break;}
   if(receipts.length>1)s.effect={...s.effect,sequence:receipts.flatMap(({effect,at})=>(effect.sequence||[effect]).map(event=>({...event,catchupDelayMs:(event.catchupDelayMs||0)+(at-receipts[0].at)*1000})))};
-  return true;
+  if(s.realtime)realtimeReceipts.set(s,s.effect);return true;
 }
-function tickStep(s,dt,input){s.elapsed+=dt;for(const u of s.units)u.isMoving=false;if(s.phase==='enemy'){enemyStep(s,dt);return true;}const u=hero(s);if(u.burningTurns){refresh(s);if(s.phase==='player'){s.panicDelay=Math.max(0,(s.panicDelay??3)-dt);if(!s.panicDelay)endTurn(s);}return true;}if(input&&Math.hypot(input.x,input.y)>.1){s.queue=[];const n=Math.max(1,Math.hypot(input.x,input.y));travel(s,u,input.x/n*movementSpeed(u)*dt,input.y/n*movementSpeed(u)*dt);}else if(s.queue.length){const p=s.queue[0],d=distance(u,p);if(d<.025)s.queue.shift();else{const step=Math.min(d,movementSpeed(u)*dt),moved=travel(s,u,(p.x-u.x)/d*step,(p.y-u.y)/d*step);if(!moved||s.phase==='player'&&u.ap<EPS)s.queue=[];}}else if(s.phase==='explore'||s.phase==='won')u.stamina=Math.min(u.maxStamina,u.stamina+dt*2);return true;}
-const fireRules=createFireRules({kill,walkSegment,random,key,log});
+function tickStep(s,dt,input){if(s.realtime)return realtimeRules.step(s,dt,input);s.elapsed+=dt;for(const u of s.units)u.isMoving=false;if(s.phase==='enemy'){enemyStep(s,dt);return true;}const u=hero(s);if(u.burningTurns){refresh(s);if(s.phase==='player'){s.panicDelay=Math.max(0,(s.panicDelay??3)-dt);if(!s.panicDelay)endTurn(s);}return true;}if(input&&Math.hypot(input.x,input.y)>.1){s.queue=[];const n=Math.max(1,Math.hypot(input.x,input.y));travel(s,u,input.x/n*movementSpeed(u)*dt,input.y/n*movementSpeed(u)*dt);}else if(s.queue.length){const p=s.queue[0],d=distance(u,p);if(d<.025)s.queue.shift();else{const step=Math.min(d,movementSpeed(u)*dt),moved=travel(s,u,(p.x-u.x)/d*step,(p.y-u.y)/d*step);if(!moved||s.phase==='player'&&u.ap<EPS)s.queue=[];}}else if(s.phase==='explore'||s.phase==='won')u.stamina=Math.min(u.maxStamina,u.stamina+dt*2);return true;}
+const fireRules=createFireRules({kill,walkSegment,random,key,log,onIgnite:(s,u)=>markDamageCredit(s,u)});
 const fuelRules=createFuelRules({kill,ignite:fireRules.ignite,recordBurn,inside:insideWorld,log,windowBlast});
 export const ignite=(s,u)=>{const result=fireRules.ignite(s,u);if(result)refresh(s);return result;};
 export const enterFire=(s,u)=>{const result=fireRules.enterFire(s,u);if(result)refresh(s);return result;};
@@ -493,7 +524,7 @@ const interactionRules=createInteractionSystem({hero,canControl,combatCosts,dist
 export const interactionObjects=s=>interactionRules.objects(s);
 export const nearbyInteractions=s=>interactionRules.nearby(s);
 export const previewInteraction=(s,id,action,itemId)=>interactionRules.preview(s,id,action,itemId);
-export const performInteraction=(s,id,action,itemId)=>interactionRules.perform(s,id,action,itemId);
+export const performInteraction=(s,id,action,itemId)=>{const result=interactionRules.perform(s,id,action,itemId);if(result.ok&&s.realtime&&!['loot','inspect'].includes(action))realtimeRules.actor(s,hero(s)).cooldown=Math.max(realtimeRules.actor(s,hero(s)).cooldown,action==='open'||action==='search'?1:.4);return result;};
 // Existing mission/menu callers use the same validated actions as the hand.
 export function interaction(s){const mission=missionForState(s),object=nearbyInteractions(s).find(object=>['ledger','objective','extract'].includes(object.kind));if(!object)return null;return {...object.actions[0],kind:object.kind,label:object.kind==='extract'?mission.extraction.label:'Take the '+mission.objective.name.toLowerCase()};}
 export function interact(s){if(missionForState(s).exploration){const object=nearbyInteractions(s)[0];return !!object&&performInteraction(s,object.id,object.actions[0].id).ok;}const secured=objectiveSecured(s);return performInteraction(s,secured?'extraction':missionForState(s).objective.id,secured?'extract':'collect').ok;}
@@ -525,6 +556,7 @@ export function decodeSave(text){
   return releaseFromScenery(restoreRuntimeSystems(s));
 }
 export function restoreRuntimeSystems(s){
+  validateRealtime(s,p=>insideWorld(s,p));
   fireRules.restore(s,p=>insideWorld(s,p));fuelRules.restore(s);
   return interactionRules.restore(s);
 }
@@ -646,4 +678,15 @@ function releaseFromScenery(s){
   }
   return s;
 }
-export const Core={tankExplosionChance,ignite,enterFire,WEAPONS,AIM_ZONES,key,alive,movementModeOf,movementRate,movementSpeed,combatCosts,canControl,canSee,visibleOpponents,refresh,log,stop,travel,navigationPath,move,turnTo,setMovementMode,setStance,grenadeCost,grenadeTrajectory,grenadeAffects,grenadeBlastFootprint,previewGrenade,throwGrenade,previewFlame,fireFlame,previewPointAttack,previewAttack,attack,equip,reload,endTurn,headingTo,interactionObjects,nearbyInteractions,previewInteraction,performInteraction,restoreRuntimeSystems};
+function realtimePlayerStep(s,dt,input){
+  const u=hero(s);
+  if(input&&Math.hypot(input.x,input.y)>.1){s.queue=[];const n=Math.max(1,Math.hypot(input.x,input.y));travel(s,u,input.x/n*movementSpeed(u)*dt,input.y/n*movementSpeed(u)*dt);}
+  else if(s.queue.length){const p=s.queue[0],d=distance(u,p);if(d<.025)s.queue.shift();else{const step=Math.min(d,movementSpeed(u)*dt);if(!travel(s,u,(p.x-u.x)/d*step,(p.y-u.y)/d*step))s.queue=[];}}
+}
+const realtimeRules=createRealtimeRules({hero,alive,distance,canSee,confirmedImpact,previewAttack,attack:(s,a,...args)=>damageAction(s,a,a.weapon,()=>attackNow(s,a,...args)),completeReload:(s,u)=>reloadNow(s,u,true),travel,movePlayer:realtimePlayerStep,approachPath,refresh,log,fireRules});
+export const enableRealtime=s=>realtimeRules.enable(s);
+export const configureRealtime=(s,changes)=>realtimeRules.configure(s,changes);
+export const pinRealtimeTarget=(s,id)=>realtimeRules.pin(s,id);
+export const realtimeStatus=s=>s.realtime?realtimeRules.status(s):null;
+export const realtimeTarget=s=>s.realtime?realtimeRules.choose(s):null;
+export const Core={enableRealtime,configureRealtime,pinRealtimeTarget,realtimeStatus,realtimeTarget,tankExplosionChance,ignite,enterFire,WEAPONS,AIM_ZONES,key,alive,movementModeOf,movementRate,movementSpeed,combatCosts,canControl,canSee,visibleOpponents,refresh,log,stop,travel,navigationPath,move,turnTo,setMovementMode,setStance,grenadeCost,grenadeTrajectory,grenadeAffects,grenadeBlastFootprint,previewGrenade,throwGrenade,previewFlame,fireFlame,previewPointAttack,previewAttack,attack,equip,reload,endTurn,headingTo,interactionObjects,nearbyInteractions,previewInteraction,performInteraction,restoreRuntimeSystems};

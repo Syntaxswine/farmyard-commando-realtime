@@ -138,8 +138,17 @@ export function validateMission(definition){
 for(const definition of definitions){const errors=validateMission(definition);if(errors.length)throw Error(definition.id+': '+errors.join(' '));}
 freeze(legacyCheckpoint);
 export const MISSIONS=freeze(definitions);
+// An additional encounter; the complete inherited operation roster is retained.
+export const FIRST_REALTIME_MISSION=freeze({
+  ...structuredClone(MISSIONS[0]),id:'quiet-shift',title:'Quiet Shift',name:'Quiet Shift',location:'MILL 04 / LOADING YARD',
+  briefing:'The loading yard is quiet. Two guards remain between you and the shift orders. Approach through the warehouse or around its eastern wall. Fire at Will begins off: find your position, choose your aim, and decide when to commit. Reload behind cover, take the orders, then return to the arrival point.',
+  objective:{...structuredClone(MISSIONS[0].objective),id:'shift-orders',kind:'objective',name:'Shift orders',instruction:'Scout the loading yard and recover the shift orders in the records office.',after:'Return to the arrival point with the orders.',collected:'The night shift has been diverted to Reserve 7. Bring these orders home.'},
+  guards:[guard('Loading-bay sentry','pistol',16,12,0),guard('Records keeper','rifle',30,5,270)],
+  steps:['Scout with Hold Fire. Choose a clear shot and enable Fire at Will.','Use cover and movement while your weapon reloads. Recover the shift orders.','Return to the arrival point; clearing both guards is optional.'],
+  result:{title:'The shift orders are out.',summary:'returned with the shift orders.',epilogue:'Your animal keeps the skills earned during this operation. The other operations and Mount Dora remain available.'},
+});
 export function getMission(id=DEFAULT_MISSION_ID,layoutVersion){
-  const definition=id===TOUR_ID?TOUR_ACTIVITY:id===WINDOW_REVIEW_ID?WINDOW_REVIEW_MISSION:id==='road-checkpoint'&&layoutVersion===1?legacyCheckpoint:MISSIONS.find(m=>m.id===id);
+  const definition=id===FIRST_REALTIME_MISSION.id?FIRST_REALTIME_MISSION:id===TOUR_ID?TOUR_ACTIVITY:id===WINDOW_REVIEW_ID?WINDOW_REVIEW_MISSION:id==='road-checkpoint'&&layoutVersion===1?legacyCheckpoint:MISSIONS.find(m=>m.id===id);
   if(!definition)throw Error('Unknown operation: '+String(id)+'.');
   if(layoutVersion!==undefined&&layoutVersion!==(definition.layoutVersion??1))throw Error('Unsupported operation layout.');
   return definition;

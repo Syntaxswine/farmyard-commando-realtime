@@ -1,0 +1,13 @@
+/* Existing painted hardware, with the persistent aim control above the stick. */
+body[data-realtime='true'] .stick-column { position:relative; }
+.realtime-aim { width:112px; height:40px; flex:none; margin:0 auto 7px; border:0; padding:0; background:none; }
+.realtime-aim .switch-legend { inset:8px; display:grid; grid-template-rows:1fr; }
+.realtime-aim .switch-label { font-size:10px; }
+.realtime-status,.realtime-target { display:block; max-width:180px; margin:0 auto 4px; text-align:center; color:#f2e4b7; font:700 9px/1.35 Consolas,'Courier New',monospace; text-shadow:0 1px 3px #000; pointer-events:none; }
+.realtime-target { color:#d1c7a6; font-size:8px; min-height:11px; }
+body[data-realtime='true'] .edition { color:#914f27; }
+body[data-realtime='true'] #end-turn[data-lit='true'] .switch-legend { color:#fff0ba; }
+@media(max-height:600px) {
+  .realtime-aim { height:30px; margin-bottom:3px; }
+  .realtime-status,.realtime-target { margin-bottom:2px; font-size:8px; }
+}

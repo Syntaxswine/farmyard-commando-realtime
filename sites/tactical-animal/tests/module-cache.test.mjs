@@ -21,7 +21,7 @@ test('a nested mission-art change versions its kit, manifest and game together w
     write('window-yard.js',"import {paneVersion} from './art/windows/catalog.js';");
     write('window-yard.html','<script type="module" src="window-yard.js"></script>');
     write('aft/pinned.js',"export const pinned=true;");
-    for(const asset of ['style.css','touch-controls.css','original-art.css','title-screen.css','map-frame.css','industrial-switches.css','field-hardware.css','icon.svg'])write(asset,'fixture');
+    for(const asset of ['style.css','touch-controls.css','original-art.css','title-screen.css','map-frame.css','industrial-switches.css','field-hardware.css','realtime.css','icon.svg'])write(asset,'fixture');
     const before=build();
     assert.ok(read('app.js').includes(`'./mission-art/test/kit.js?v=${before}'`));
     assert.ok(read('mission-art/test/kit.js').includes(`'./manifest.js?v=${before}'`));

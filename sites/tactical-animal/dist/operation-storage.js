@@ -7,11 +7,12 @@ const LEGACY_BUILD='tactical-animal-build-v1';
 
 // Preparation preferences and completion records never replace an active save.
 // Each operation also owns a slot, so starting the other one preserves a resume.
-export function createOperationStorage(backend,{normalizeBuild,encodeSave,decodeSave,missions=MISSIONS}){
+export function createOperationStorage(backend,{normalizeBuild,encodeSave,decodeSave,missions=MISSIONS,namespace='',defaultMissionId=DEFAULT_MISSION_ID}){
+  const OPERATION_SAVE=namespace+'tactical-animal-operation-v2',OPERATION_SLOT=namespace+'tactical-animal-operation-v3:',PREPARATION_SAVE=namespace+'tactical-animal-first-shift-v1',LEGACY_BUILD=namespace+'tactical-animal-build-v1';
   function preferences(){
     const text=backend.getItem(PREPARATION_SAVE),saved=text?JSON.parse(text):null;
     if(saved&&(saved.version!==1||saved.campaignId!=='first-shift'))throw Error('Unsupported operation preferences.');
-    const selectedMissionId=getMission(saved?.selectedMissionId??DEFAULT_MISSION_ID).id;
+    const selectedMissionId=getMission(saved?.selectedMissionId??defaultMissionId).id;
     const builds=Object.fromEntries(missions.map(mission=>[mission.id,normalizeBuild(saved?.builds?.[mission.id])]));
     if(!saved){try{builds[DEFAULT_MISSION_ID]=normalizeBuild(JSON.parse(backend.getItem(LEGACY_BUILD)||'null'));}catch{}}
     return {version:1,campaignId:'first-shift',selectedMissionId,builds,completed:(saved?.completed||[]).filter(id=>missions.some(mission=>mission.id===id))};

@@ -61,7 +61,7 @@ export async function loadTownTour({build,progress=null,signal,fetcher=globalThi
       Object.assign(initial,structuredClone(u),{id:0,team:'squad',x:world.startPoint.x,y:world.startPoint.y,isMoving:false});state.seen=progress.seen instanceof TownExplored?progress.seen:TownExplored.restore(progress.explored);
       state.solo.dressings=progress.dressings;state.solo.distance=progress.distance;state.elapsed=progress.elapsed;state.log=(progress.log||[]).filter(x=>typeof x==='string').slice(0,20);
       if(progress.runtime){
-        const r=progress.runtime;Object.assign(state,{phase:r.phase,round:r.round,seed:r.seed,engaged:r.engaged,enemyIndex:r.enemyIndex,enemyDelay:r.enemyDelay,fires:structuredClone(r.fires)});
+        const r=progress.runtime;if(r.realtime)state.realtime=structuredClone(r.realtime);Object.assign(state,{phase:r.phase,round:r.round,seed:r.seed,engaged:r.engaged,enemyIndex:r.enemyIndex,enemyDelay:r.enemyDelay,fires:structuredClone(r.fires)});
         if(r.panicDelay!==undefined)state.panicDelay=r.panicDelay;
         state.solo.status=r.status;if(r.areaWeapon)state.solo.areaWeapon=r.areaWeapon;
         for(const saved of r.objects){const object=state.interactables.find(o=>o.id===saved?.id);if(!object)continue;for(const key of ['open','searched','inventory'])if(saved[key]!==undefined)object[key]=structuredClone(saved[key]);}

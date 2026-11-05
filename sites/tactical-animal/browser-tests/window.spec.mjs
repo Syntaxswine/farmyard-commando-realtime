@@ -32,7 +32,7 @@ test('actual window editor and FieldView compile shaders, pick, break, persist a
     await context.tracing.start({screenshots:true,snapshots:true,sources:true});
     await context.addInitScript(installNativeProbe);
     await context.route('**/*',route=>{const url=new URL(route.request().url());return ['127.0.0.1','localhost'].includes(url.hostname)||['data:','blob:'].includes(url.protocol)?route.continue():route.abort('blockedbyclient');});
-    editor=await context.newPage();capturePage(editor,'editor',report);await editor.goto(origin+'/map-designer.html');
+    editor=await context.newPage();capturePage(editor,'editor',report);await editor.goto(origin+'/map-designer.html?rules=turn-based');
     const frame=editor.frameLocator('#designer');
     await expect.poll(()=>editor.locator('#playtest').isEnabled(),{timeout:45000}).toBe(true);
     await editor.locator('#review').click();await expect.poll(async()=>!(await editorState(frame)).loading,{timeout:45000}).toBe(true);

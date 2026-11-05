@@ -1,5 +1,14 @@
 # Gameplay authoring and playtests
 
+- This repository is the complete real-time fork of Farmyard Commando. The
+  `upstream` remote is read-only. Publish only to
+  `Syntaxswine/farmyard-commando-realtime`; do not change or deploy the original
+  turn-based repository. Preserve inherited content until the user requests cuts.
+- The default game and editor's Farmyard playtest use the real-time scheduler.
+  The explicit `rules=turn-based` proving-yard option exists for inherited
+  regression comparisons. Real-time character, operation, town and tool storage
+  must stay separate from the original game's browser storage.
+
 - Previews, demos and test maps use the production game bootstrap, controls,
   renderer, simulation, equipment, ammunition, reload, grenade/flamethrower,
   health/fire, interaction and save systems. Do not silently disable gameplay

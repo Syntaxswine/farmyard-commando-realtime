@@ -3840,9 +3840,9 @@
     },
     {
       "path": "tactics/battle-3d.html",
-      "sha256": "6d83e855be3429b66cafdc489ec03bfbe3bc11311c7d21bddcdd1e0d01c10c3b",
+      "sha256": "f80c2dd5d3a905266b50d7103383ee62bba9013484e998619ff5871f3f0eb7d4",
       "sourceSha256": "9e574d59a2a580568d587f60c85951a4283e153e86e67542ed54c2eb5976646d",
-      "bytes": 7102
+      "bytes": 7150
     },
     {
       "path": "tactics/battle-3d.js",
@@ -4860,9 +4860,9 @@
     },
     {
       "path": "tactics/editor-3d.html",
-      "sha256": "8e5120a4220d51c18ff5e40606dcb790ceb4e7ebc2569500428eb34eed2789ea",
+      "sha256": "5c193121e0a0b398e9e9a73e82ca9118e98ef4655651ed14a9cf5a41e64553d5",
       "sourceSha256": "d1bab0a013615dfec394b601a4928e9dcd2e92d1775c9353a372295ee020cbd6",
-      "bytes": 4587
+      "bytes": 4635
     },
     {
       "path": "tactics/editor-3d.js",
@@ -5916,9 +5916,9 @@
     },
     {
       "path": "tactics/overmap.html",
-      "sha256": "625b9ed5125f12d9e50f5d1bf16181b70c9068067dc1effee54a8ad44812892d",
+      "sha256": "7387e8adc830d81e4bad9d4bc4dc8a7c92b4af569c68e0a18c7b95601b4deee5",
       "sourceSha256": "306bd16a3db584eba6d0165e6308a49a67c625ac6d8ee50758397bc2c408236f",
-      "bytes": 10406
+      "bytes": 10454
     },
     {
       "path": "tactics/overmap.js",
@@ -6270,9 +6270,9 @@
     },
     {
       "path": "tactics/sector-library.html",
-      "sha256": "cd182da81e3ed1b0a38c060c4c06670aab171a7e8d5e9eb92e835c60ca54e4ff",
+      "sha256": "a0ca9c40f3a82c0dee1232ede81557c86e6d1b8a3205d3c4faba9cb53f8d4971",
       "sourceSha256": "cd182da81e3ed1b0a38c060c4c06670aab171a7e8d5e9eb92e835c60ca54e4ff",
-      "bytes": 3145
+      "bytes": 3193
     },
     {
       "path": "tactics/sector-library.js",
@@ -7918,5 +7918,16 @@
       "sourceSha256": "0b051dfa91742a11d25aaa401b4514078dbdf5017512aafe72aa6eba67bba159",
       "bytes": 3545
     }
-  ]
+  ],
+  "realtimeForkAdaptation": {
+    "reason": "Isolate browser editor/library/folder state from the turn-based GitHub Pages origin.",
+    "adapter": "fork-storage.js",
+    "htmlEntries": [
+      "designer/a20b343a0234/tactics/battle-3d.html",
+      "designer/a20b343a0234/tactics/editor-3d.html",
+      "designer/a20b343a0234/tactics/overmap.html",
+      "designer/a20b343a0234/tactics/sector-library.html",
+      "designer/a20b343a0234/tactics/sector-library/tutorial-plateau.html"
+    ]
+  }
 }
