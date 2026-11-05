@@ -9,11 +9,11 @@ export const WEAPON_TIMING=Object.freeze({
   assault:{shot:.5,reload:2.4},smg:{shot:.4,reload:2.8},rifle:{shot:1.25,reload:2.8},
   shotgun:{shot:1,reload:3},sniper:{shot:1.8,reload:3.2},hmg:{shot:.7,reload:4},
   grenade:{shot:1.2,reload:0},launcher:{shot:1.6,reload:3.6},rpg:{shot:2.2,reload:4},
-  flamethrower:{shot:1.8,reload:3.5},
+  flamethrower:{shot:3,reload:3.5},
 });
 export const TARGET_PRIORITIES=['nearest','weakest','threat'];
-export const automaticWeapon=weapon=>!!WEAPONS[weapon]?.mag&&!WEAPONS[weapon].blast&&!WEAPONS[weapon].incendiary&&!WEAPONS[weapon].thrown;
-export const shotSeconds=(weapon,aim='hip',burst=false)=>WEAPON_TIMING[weapon].shot*(AIM_LEVELS[aim]?.multiplier||1)*(burst&&WEAPONS[weapon].burstRounds?1.5:1);
+export const automaticWeapon=weapon=>!!WEAPONS[weapon]?.mag&&!WEAPONS[weapon].blast&&!WEAPONS[weapon].thrown;
+export const shotSeconds=(weapon,aim='hip',burst=false)=>WEAPON_TIMING[weapon].shot*(WEAPONS[weapon].incendiary?1:AIM_LEVELS[aim]?.multiplier||1)*(burst&&WEAPONS[weapon].burstRounds?1.5:1);
 export const grenadeSeconds=unit=>WEAPON_TIMING.grenade.shot*(['pistol','pistol-offhand','smg'].includes(unit.weapon)?.5:1);
 const emptyActor=weapon=>({weapon,cooldown:0,aimRemaining:0,signature:'',targetId:null,reload:null,manual:null,route:[],repath:0,search:8,credit:null});
 const finite=(n,max=60)=>Number.isFinite(n)&&n>=0&&n<=max;
@@ -42,7 +42,7 @@ export function awardRealtimeKill(state,source){
   }
 }
 
-export function createRealtimeRules({hero,alive,distance,canSee,confirmedImpact,previewAttack,attack,completeReload,travel,movePlayer,approachPath,refresh,log,fireRules}){
+export function createRealtimeRules({hero,alive,distance,canSee,confirmedImpact,previewAttack,attack,headingTo,flameAffects,previewFlame,fireFlame,completeReload,travel,movePlayer,approachPath,refresh,log,fireRules}){
   const actor=(s,u)=>s.realtime.actors[u.id]??=(emptyActor(u.weapon));
   function enable(s){
     if(!s.realtime){
@@ -62,7 +62,7 @@ export function createRealtimeRules({hero,alive,distance,canSee,confirmedImpact,
     if(changes.aim!==undefined&&!Object.hasOwn(AIM_LEVELS,changes.aim)||changes.priority!==undefined&&!TARGET_PRIORITIES.includes(changes.priority)||changes.zone!==undefined&&!Object.hasOwn({head:1,torso:1,legs:1,weapon:1},changes.zone)||changes.burst!==undefined&&typeof changes.burst!=='boolean'||changes.autoFire!==undefined&&typeof changes.autoFire!=='boolean')return false;
     const a=actor(s,hero(s)),changed=changes.aim!==undefined&&changes.aim!==r.aim||changes.zone!==undefined&&changes.zone!==r.zone||changes.burst!==undefined&&changes.burst!==r.burst;
     Object.assign(r,changes);
-    if(changed){resetAim(a);a.manual=null;}
+    if(changed&&!WEAPONS[hero(s).weapon].incendiary){resetAim(a);a.manual=null;}
     if(changes.autoFire===false){a.manual=null;r.targetId=null;resetAim(a);}
     s.revision++;return true;
   }
@@ -79,7 +79,7 @@ export function createRealtimeRules({hero,alive,distance,canSee,confirmedImpact,
     const a=actor(s,u);a.manual={targetId:target.ground?null:target.id,point:target.ground?{...target}:null,burst,zone,aim};resetAim(a);return true;
   }
   function eligible(s,u,v,zone){
-    return alive(v)&&v.team!==u.team&&canSee(s,u,v)&&(u.team!=='squad'||s.detected.has(v.id))&&distance(u,v)<=WEAPONS[u.weapon].range&&confirmedImpact(s,u,v,zone)?.unit?.id===v.id;
+    return alive(v)&&v.team!==u.team&&canSee(s,u,v)&&(u.team!=='squad'||s.detected.has(v.id))&&distance(u,v)<=WEAPONS[u.weapon].range&&(WEAPONS[u.weapon].incendiary?flameAffects(s,u,v,headingTo(u,v)):confirmedImpact(s,u,v,zone)?.unit?.id===v.id);
   }
   const threat=(u,v)=>WEAPONS[v.weapon].damage*(WEAPONS[v.weapon].pellets||1)/shotSeconds(v.weapon)/(1+distance(u,v)/Math.max(1,WEAPONS[v.weapon].range));
   function choose(s){
@@ -95,13 +95,16 @@ export function createRealtimeRules({hero,alive,distance,canSee,confirmedImpact,
     return better?best:current;
   }
   function fire(s,u,target,aim,burst,zone,dt,effects){
+    // Flame is an area effect: no aim acquisition, body zone or aim modifier.
+    if(WEAPONS[u.weapon].incendiary){aim='hip';burst=false;zone='torso';}
     const a=actor(s,u),signature=[target.ground?JSON.stringify(target):target.id,u.weapon,aim,burst,zone].join('/');
-    if(a.signature!==signature){a.signature=signature;a.targetId=target.id??null;a.aimRemaining=shotSeconds(u.weapon,aim,burst);}
+    if(a.signature!==signature){a.signature=signature;a.targetId=target.id??null;a.aimRemaining=WEAPONS[u.weapon].incendiary?0:shotSeconds(u.weapon,aim,burst);}
     // Acquisition cannot overlap a reload or shorten the previous shot's recovery.
     if(!ready(s,u))return;
     a.aimRemaining=Math.max(0,a.aimRemaining-dt);if(a.aimRemaining>1e-7)return;
-    const p=previewAttack(s,u,target,burst,zone,null,aim);if(!p.ok)return;
-    if(attack(s,u,target,burst,u.team==='guard',zone,false,aim)){
+    const flame=u.team==='squad'&&WEAPONS[u.weapon].incendiary,heading=flame?headingTo(u,target):null;
+    const p=flame?previewFlame(s,u,heading):previewAttack(s,u,target,burst,zone,null,aim);if(!p.ok)return;
+    if(flame?fireFlame(s,u,heading):attack(s,u,target,burst,u.team==='guard',zone,false,aim)){
       a.cooldown=shotSeconds(u.weapon,aim,burst);a.manual=null;a.aimRemaining=0;
       if(s.effect)effects.push(s.effect);
     }

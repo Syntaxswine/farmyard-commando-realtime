@@ -672,7 +672,7 @@ function frame(now){
       else{Core.stop(state);if(keys.size){if(flameAim.active){flameAim.aim({x,y});renderFlameControls();}else{grenadeAim.nudge(hero(state),{x,y},Core.WEAPONS.grenade.range,dt);updateGrenadePreview();}}}
       tick(state,dt);
     }else{if(Math.hypot(x,y)>.1&&view.focusedId!=null)view.center();tick(state,dt,Math.hypot(x,y)>.1?screenToGround(x,y):null);}
-    if(state.phase!==lastPhase){resetStick();keys.clear();cancelAreaAim();Core.stop(state);lastPhase=state.phase;contextKey='';}
+    if(state.phase!==lastPhase){if(!state.realtime||state.solo.status!=='active'){resetStick();keys.clear();cancelAreaAim();Core.stop(state);}lastPhase=state.phase;contextKey='';}
     if(now-lastSave>2500){storage.write();lastSave=now;}
   }
   if(simulating&&state.solo.status==='active'){
@@ -699,7 +699,7 @@ function toggleRealtimeFire(){
   act(()=>Core.configureRealtime(state,{autoFire:!state.realtime.autoFire}),{keepMovement:true});
 }
 function cycleRealtimeAim(){
-  if(!state?.realtime||paused)return;
+  if(!state?.realtime||paused||Core.WEAPONS[hero(state).weapon].incendiary)return;
   const values=['hip','aimed','full'];
   act(()=>Core.configureRealtime(state,{aim:values[(values.indexOf(state.realtime.aim)+1)%3]}),{keepMovement:true});
 }
@@ -712,8 +712,8 @@ function renderRealtimeBattle(){
   trigger.setAttribute('aria-label',`${r.autoFire?'Fire at will on. Hold fire':'Hold fire. Enable fire at will'}. Hold for aim and target priority.`);
   trigger.title=r.automatic?'Space: toggle fire at will. Hold for firing settings.':'This weapon uses deliberate area or point targeting.';
   $('turn-label').innerHTML=r.autoFire?'FIRE AT<br>WILL':'HOLD<br>FIRE';
-  $('realtime-aim').hidden=false;$('realtime-aim').disabled=!Core.canControl(state,u)||aiming();
-  $('realtime-aim-label').textContent=aimNames[r.aim];$('realtime-aim').setAttribute('aria-label',`Aim: ${aimNames[r.aim].toLowerCase()}. Tap to change aim level.`);
+  $('realtime-aim').hidden=false;$('realtime-aim').disabled=!!w.incendiary||!Core.canControl(state,u)||aiming();
+  $('realtime-aim-label').textContent=w.incendiary?'AREA FIRE':aimNames[r.aim];$('realtime-aim').setAttribute('aria-label',w.incendiary?'Flamethrower area fire. One cone every 3 seconds. No aiming required.':`Aim: ${aimNames[r.aim].toLowerCase()}. Tap to change aim level.`);
   $('ap').textContent=String(r.ammo);$('ap-label').textContent=w.mag?'ROUNDS':'MELEE';
   $('realtime-status').textContent=r.reloading?`RELOADING ${r.remaining.toFixed(1)}s · ${r.reserve} SPARE`:`${w.short} · ${r.ammo}/${w.mag} · ${r.reserve} SPARE`;
   $('realtime-target').textContent=!r.ammo&&!r.reserve&&w.mag?'OUT OF AMMUNITION':target?`${target.name} · ${priorityNames[r.priority]}`:r.autoFire?'WAITING FOR CLEAR SHOT':'HOLD FIRE';
@@ -724,9 +724,9 @@ function renderRealtimeBattle(){
 function fireSettings(){
   if(!state?.realtime)return;storage.write();
   const r=state.realtime;
-  showDialog('<p class="eyebrow">FIRE CONTROL / PAUSED</p><h2>Choose your commitment.</h2><p>Aim and target priority stay selected between shots. Your animal only fires at detected hostiles with a clear bullet path. Moving reduces accuracy.</p>',[
+  showDialog('<p class="eyebrow">FIRE CONTROL / PAUSED</p><h2>Choose your commitment.</h2><p>Aim and target priority stay selected between shots. Your animal only fires at detected hostiles with a clear firing path. The flamethrower fires one cone every 3 seconds with no aiming, using its fuel supply. Moving reduces firearm accuracy.</p>',[
     [r.autoFire?'Hold fire':'Enable fire at will',()=>act(()=>Core.configureRealtime(state,{autoFire:!r.autoFire})),'primary'],
-    ...['hip','aimed','full'].map(value=>[`${aimNames[value]} · ×${value==='hip'?'1':value==='aimed'?'1.5':'2'} shot interval${r.aim===value?' · selected':''}`,()=>{Core.configureRealtime(state,{aim:value});fireSettings();}]),
+    ...(Core.WEAPONS[hero(state).weapon].incendiary?[]:['hip','aimed','full'].map(value=>[`${aimNames[value]} · ×${value==='hip'?'1':value==='aimed'?'1.5':'2'} shot interval${r.aim===value?' · selected':''}`,()=>{Core.configureRealtime(state,{aim:value});fireSettings();}])),
     ...['nearest','weakest','threat'].map(value=>[`Target: ${priorityNames[value]}${r.priority===value?' · selected':''}`,()=>{Core.configureRealtime(state,{priority:value});fireSettings();}]),
     ['Release pinned target',()=>{Core.pinRealtimeTarget(state,null);fireSettings();},'',r.pinnedId===null],
     ['Return to operation',()=>{}]
@@ -734,7 +734,7 @@ function fireSettings(){
 }
 function realtimeMenu(){
   pointTargeting=false;storage.write();const u=hero(state),r=Core.realtimeStatus(state);
-  showDialog(`<p class="eyebrow">${safe(missionForState(state).title)} / REAL TIME PAUSED</p><h2>Field menu.</h2><p>${safe(u.name)} · ${safe(short(u.weapon))} · ${r.kills} kills<br>${r.autoFire?'Fire at will':'Hold fire'} · ${aimNames[r.aim]} · ${priorityNames[r.priority]}</p>`,[
+  showDialog(`<p class="eyebrow">${safe(missionForState(state).title)} / REAL TIME PAUSED</p><h2>Field menu.</h2><p>${safe(u.name)} · ${safe(short(u.weapon))} · ${r.kills} kills<br>${r.autoFire?'Fire at will':'Hold fire'} · ${Core.WEAPONS[u.weapon].incendiary?'AREA FIRE / 3 s':aimNames[r.aim]} · ${priorityNames[r.priority]}</p>`,[
     ['Continue operation',()=>{},'primary'],['Fire control: aim & target priority',fireSettings],
     ...weaponActions(),...(isTour(state)?[['Visit landmark',tourVisits],['Tour notes',tourNotes]]:[]),
     ['Mission & combat log',mission],['Controls',realtimeHelp],['Choose operation, animal & loadout',backToPrep],
@@ -742,7 +742,7 @@ function realtimeMenu(){
     ['Restart this operation',()=>isTour(state)?launchTour():start(createSoloGame(state.solo.build,1947,state.solo.missionId))]
   ]);
 }
-function realtimeHelp(){showDialog('<p class="eyebrow">REAL-TIME FIELD NOTES</p><h2>Move. Conceal. Commit.</h2><p>Joystick, WASD or arrows move. Standing runs by default; crouching and crawling are slower. Sneak halves the speed of your posture. Stance switches remain free and bounce through kneeling.</p><p>The top right button toggles Hold Fire / Fire at Will (Space). Hold it for nearest, weakest or biggest-threat priority. Tap the aim button above the joystick (Q) to cycle hip fire, aimed and full aim. Higher aim takes longer, including before the first shot. A valid current target stays selected unless a substantially better target appears.</p><p>Tap an opponent for the original CRT body-location and manual firing controls, and to pin that target. Empty guns automatically reload from your finite reserve; R or Options reloads early. You can move while reloading. Options and other dialogs pause the whole encounter; switching away also pauses without catching up later.</p><p>Grenades (G), flamethrowers (F), point shots, doors, loot and treatment retain their production controls. Area aiming suspends your automatic gunfire while enemies continue acting. Release the joystick before confirming a throw or flame burst. Explosive and flame weapons are always deliberate.</p><p>An opening hit while sneaking against an unaware opponent deals ×1.5 damage. Noise gives guards a place to investigate; friendly gunfire shares the shooter’s last known opponent position. Guards search after reaching that area, rather than forgetting mid-route. Kills earn the weapon skill XP; stealth kills also earn Sneak XP. First improvement: 3 kills in that skill, then progressively more.</p>',[['Back to menu',realtimeMenu],['Return to operation',()=>{},'primary']]);}
+function realtimeHelp(){showDialog('<p class="eyebrow">REAL-TIME FIELD NOTES</p><h2>Move. Conceal. Commit.</h2><p>Joystick, WASD or arrows move. Standing runs by default; crouching and crawling are slower. Sneak halves the speed of your posture. Stance switches remain free and bounce through kneeling.</p><p>The top right button toggles Hold Fire / Fire at Will (Space). Hold it for nearest, weakest or biggest-threat priority. Tap the aim button above the joystick (Q) to cycle hip fire, aimed and full aim. Higher aim takes longer, including before the first shot. A valid current target stays selected unless a substantially better target appears.</p><p>Tap an opponent for the original CRT body-location and manual firing controls, and to pin that target. Empty guns automatically reload from your finite reserve; R or Options reloads early. You can move while reloading. Options and other dialogs pause the whole encounter; switching away also pauses without catching up later.</p><p>Grenades (G), flamethrowers (F), point shots, doors, loot and treatment retain their production controls. Area aiming suspends your automatic gunfire while enemies continue acting. Release the joystick before confirming a throw or flame burst. Flamethrowers also work with Fire at Will: one cone every 3 seconds, with no aiming. They use their normal cone, fuel and reload rules. Explosive weapons remain deliberate.</p><p>An opening hit while sneaking against an unaware opponent deals ×1.5 damage. Noise gives guards a place to investigate; friendly gunfire shares the shooter’s last known opponent position. Guards search after reaching that area, rather than forgetting mid-route. Kills earn the weapon skill XP; stealth kills also earn Sneak XP. First improvement: 3 kills in that skill, then progressively more.</p>',[['Back to menu',realtimeMenu],['Return to operation',()=>{},'primary']]);}
 function realtimeHardware(parent,{control,paint,icon,mark='',pressed,bar=false,disabled=false,onClick}){
   const b=document.createElement('button');b.type='button';b.className='industrial-switch shooting-switch'+(bar?' fire-bar':'');b.dataset.control=control;b.dataset.face=bar?'red':'amber';b.disabled=disabled;
   b.setAttribute('aria-label',paint+(mark?' · '+mark:''));if(pressed!==undefined)b.setAttribute('aria-pressed',String(pressed));

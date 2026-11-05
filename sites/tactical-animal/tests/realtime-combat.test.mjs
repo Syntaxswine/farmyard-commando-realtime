@@ -107,6 +107,50 @@ test('grenades and flamethrowers keep production resources, effects and timed re
  const s=fixture(),u=hero(s);assert(Core.throwGrenade(s,u,{x:20,y:17}));assert.equal(u.ammo.grenade,2);assert(s.effect.sequence.some(e=>e.weapon==='grenade'));assert.equal(Core.throwGrenade(s,u,{x:20,y:17}),false);
  const f=fixture({primary:'flamethrower'}),v=hero(f);assert(Core.fireFlame(f,v,270));assert.equal(v.ammo.flamethrower,3);assert(f.effect.sequence[0].flame);assert.equal(Core.fireFlame(f,v,270),false);
 });
+test('Fire at Will enables the flamethrower and uses its real cone, fuel, ash and skill credit',()=>{
+ const s=fixture({primary:'flamethrower'}),u=hero(s),g=s.units[1],a=app({realTime:true,initialState:s});
+ assert.equal(a.el('end-turn').disabled,false);a.el('end-turn').click();assert(s.realtime.autoFire);
+ a.advance(1);
+ assert.equal(u.ammo.flamethrower,3);assert.equal(g.hp,0);assert(g.burnedRemains);assert.equal(s.realtime.earned.heavyWeapons,1);
+ assert(s.effect.sequence.some(e=>e.weapon==='flamethrower'&&e.flame&&e.impacts.some(v=>v.id===g.id&&v.dead)));
+});
+test('automatic flame uses cone exposure above cover instead of a bullet torso ray',()=>{
+ const s=fixture({primary:'flamethrower',crate:true}),u=hero(s),g=s.units[1];
+ assert(Core.previewFlame(s,u,Core.headingTo(u,g)).contacts.some(v=>v.id===g.id));assert.equal(Core.realtimeTarget(s)?.id,g.id);
+ Core.configureRealtime(s,{autoFire:true});advance(s,.05);assert.equal(u.ammo.flamethrower,3);assert.equal(g.hp,0);
+});
+test('automatic flame respects glass, walls, range, hold fire and manual area-aim suspension',()=>{
+ const source=windowReviewSource();source.guards=source.guards.slice(0,1);
+ const glass=Core.enableRealtime(createSoloGame({...DEFAULT_BUILD,primary:'flamethrower'},1,WINDOW_REVIEW_ID,{authoredMap:source}));
+ assert(Core.canSee(glass,hero(glass),glass.units[1]));assert.equal(Core.realtimeTarget(glass),null);Core.configureRealtime(glass,{autoFire:true});advance(glass,2);assert.equal(hero(glass).ammo.flamethrower,4);
+ const wall=fixture({primary:'flamethrower',door:true});Core.configureRealtime(wall,{autoFire:true});advance(wall,2);assert.equal(hero(wall).ammo.flamethrower,4);
+ const s=fixture({primary:'flamethrower'}),u=hero(s);advance(s,2);assert.equal(u.ammo.flamethrower,4);
+ Core.configureRealtime(s,{autoFire:true});s.realtime.suspended=true;advance(s,2);assert.equal(u.ammo.flamethrower,4);
+ s.units[1].x=40;Core.refresh(s);s.realtime.suspended=false;advance(s,2);assert.equal(u.ammo.flamethrower,4);
+});
+test('flame fires immediately then at a fixed three-second interval, without aim or retarget modifiers',()=>{
+ for(const aim of ['hip','aimed','full']){
+  const s=fixture({primary:'flamethrower',guards:[{x:28,y:25},{x:12,y:25}]}),u=hero(s);Core.configureRealtime(s,{autoFire:true,aim});advance(s,.05);assert.equal(u.ammo.flamethrower,3);
+  Core.turnTo(s,u,180);Core.configureRealtime(s,{aim:aim==='full'?'hip':'full'});advance(s,2.95);assert.equal(u.ammo.flamethrower,3);advance(s,.05);assert.equal(u.ammo.flamethrower,2);
+ }
+});
+test('automatic flame preserves movement routes and the disabled aim control retains firearm settings',()=>{
+ const s=fixture({primary:'flamethrower',guards:[{x:28,y:25},{x:60,y:60}]}),u=hero(s);Core.setStance(s,u,'prone');Core.configureRealtime(s,{autoFire:true});assert(Core.move(s,u,36,25));advance(s,.05);assert.equal(u.ammo.flamethrower,3);assert(s.queue.length);const before=s.solo.distance;advance(s,.3);assert(s.solo.distance>before);
+ const state=fixture({primary:'flamethrower'});Core.configureRealtime(state,{aim:'full'});const a=app({realTime:true,initialState:state});assert(a.el('realtime-aim').disabled);assert.equal(a.el('realtime-aim-label').textContent,'AREA FIRE');a.key('q');assert.equal(state.realtime.aim,'full');Core.equip(state,hero(state),'pistol');a.advance(3);assert.equal(a.el('realtime-aim').disabled,false);assert.equal(a.el('realtime-aim-label').textContent,'FULL AIM');
+});
+test('the live application keeps walking when automatic flame kills the last guard',()=>{
+ const s=fixture({primary:'flamethrower'}),a=app({realTime:true,initialState:s});a.el('end-turn').click();a.view.options.onPick({x:36,y:25});assert(s.queue.length);a.advance(1);
+ assert.equal(s.phase,'won');assert(s.queue.length);const distance=s.solo.distance;a.advance(3);assert(s.solo.distance>distance);
+});
+test('automatic flame resumes after a saved fuel reload and stops when reserve is exhausted',()=>{
+ const s=fixture({primary:'flamethrower'}),u=hero(s);u.ammo.flamethrower=0;const reserve=u.ammoPouch.flamethrower;Core.configureRealtime(s,{autoFire:true});tick(s,.05);advance(s,.7);
+ const copy=decodeSave(encodeSave(s));assert(copy.realtime.actors[0].reload);advance(copy,2.8);assert.equal(hero(copy).ammo.flamethrower,4);assert.equal(hero(copy).ammoPouch.flamethrower,reserve-4);advance(copy,1.9);assert.equal(hero(copy).ammo.flamethrower,3);assert.equal(copy.units[1].hp,0);
+ const empty=fixture({primary:'flamethrower'});hero(empty).ammo.flamethrower=hero(empty).ammoPouch.flamethrower=0;Core.configureRealtime(empty,{autoFire:true});advance(empty,5);assert.equal(hero(empty).ammo.flamethrower,0);assert.equal(Core.realtimeStatus(empty).reloading,false);
+});
+test('automatic flame retains the production tank explosion and burning-ground effects',()=>{
+ const s=fixture({primary:'flamethrower',guards:[{x:28,y:25,weapon:'flamethrower'}]});Core.configureRealtime(s,{autoFire:true});advance(s,.05);
+ assert.equal(hero(s).ammo.flamethrower,3);assert(s.units[1].tanksExploded);assert(s.fires.length);assert(s.effect.sequence.some(e=>e.explosions.some(v=>v.kind==='tank')));
+});
 test('burning follows the inherited three panic stages on real-time seconds, including resume',()=>{
  const s=fixture(),u=hero(s);assert(Core.ignite(s,u));advance(s,3);assert.equal(u.burningTurns,2);const copy=decodeSave(encodeSave(s));advance(copy,6);assert.equal(hero(copy).hp,0);assert.equal(copy.solo.status,'lost');assert(hero(copy).burnedRemains);
 });

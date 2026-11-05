@@ -35,9 +35,19 @@ const project=(page,point)=>page.evaluate(async point=>{const url=document.query
 async function wait(page,predicate,label,timeout=20000){const end=Date.now()+timeout;let last;while(Date.now()<end){last=await snapshot(page);if(predicate(last))return last;if(last.status==='lost')throw Error('Encounter lost while '+label+': '+JSON.stringify(last));await page.waitForTimeout(100);}throw Error(label+': '+JSON.stringify(last));}
 async function tap(page,selector,phone){if(phone){const b=await page.locator(selector).boundingBox();await page.touchscreen.tap(b.x+b.width/2,b.y+b.height/2);}else await page.locator(selector).click();}
 async function pointClick(page,point){
- // Use the existing zoom controls until this ground point is actually visible.
- for(let i=0;i<7;i++){const p=await project(page,point);if(p?.visible&&p.y<440&&p.y>110&&p.x>75&&p.x<725)break;await page.locator('#zoom-out').click();}
- let p;await page.evaluate(()=>new Promise(resolve=>{let n=0;function next(){if(++n===8)resolve();else requestAnimationFrame(next);}requestAnimationFrame(next);}));p=await project(page,point);assert(p?.visible,'requested point is on the real camera');await page.mouse.click(p.x,p.y);
+ // Wait for the real follow/zoom camera and never click a HUD switch that
+ // happens to cover the requested ground point's screen projection.
+ for(let i=0;i<11;i++){
+  const p=await page.evaluate(async point=>{
+   const app=await import(document.querySelector('script[src*="app.js"]').src);let previous,stable=0,p;
+   const end=performance.now()+10000;
+   while(performance.now()<end){await new Promise(requestAnimationFrame);p=app.projectRealtimePoint(point);if(p&&previous&&Math.hypot(p.x-previous.x,p.y-previous.y)<.12)stable++;else stable=0;if(stable>=2)return p;previous=p;}return p;
+  },point);
+  const clear=p?.visible&&await page.evaluate(p=>!!document.elementFromPoint(p.x,p.y)?.closest('#viewport'),p);
+  if(clear){await page.mouse.click(p.x,p.y);return;}
+  await page.locator('#zoom-out').click();
+ }
+ throw Error('Requested ground point has no unobstructed screen projection: '+JSON.stringify(point));
 }
 async function moveTo(page,point){await pointClick(page,{...point,h:0});return wait(page,s=>Math.hypot(s.player.x-point.x,s.player.y-point.y)<.4,'walk to '+JSON.stringify(point),25000);}
 async function screenshot(page,name){await page.screenshot({path:path.join(out,name+'.png'),fullPage:true});}
@@ -64,9 +74,10 @@ try{
     await page.locator('#menu').click();await page.getByRole('button',{name:'Aim firearm at a point',exact:true}).click();await pointClick(page,{x:5,y:20,h:1.1});await page.getByRole('button',{name:/^Fire ·/}).click();
     s=await wait(page,s=>s.ammo===29,'manual point shot');await page.locator('#menu').click();await page.getByRole('button',{name:/^Reload AK-47/}).click();s=await wait(page,s=>s.reloading,'timed reload');assert.equal(s.ammo,29);const before=s.player;
     await page.keyboard.down('a');try{s=await wait(page,s=>Math.hypot(s.player.x-before.x,s.player.y-before.y)>.1,'held movement during reload',8000);}finally{await page.keyboard.up('a');}await screenshot(page,'desktop-reload-moving');await wait(page,s=>!s.reloading&&s.ammo===30,'completed reload');mark('desktop real shot, timed reload, reserve consumption and movement');
-    await page.locator('#end-turn').click();await moveTo(page,{x:19,y:23});await moveTo(page,{x:19,y:12});
-    s=await wait(page,s=>s.kills>0||s.ammo<30,'automatic engagement',25000);assert(s.autoFire);assert.notEqual(s.phase,'enemy');await screenshot(page,'desktop-fire-at-will');mark('desktop fire at will in authored encounter',{ammo:s.ammo,kills:s.kills,phase:s.phase});
-    await page.locator('#menu').click();await page.getByRole('button',{name:'Choose operation, animal & loadout',exact:true}).click();assert.equal(await page.locator('#resume').isVisible(),true);await page.locator('#resume').click();s=await wait(page,s=>s.ready,'saved encounter');assert(s.autoFire);mark('desktop real operation save/resume');
+    // The point shot already alerted the guards. Hold the covered arrival area
+    // and let them approach; pause immediately after the automatic engagement.
+    await page.locator('#end-turn').click();s=await wait(page,s=>s.kills>0||s.ammo<30,'automatic engagement',25000);assert(s.autoFire);assert.notEqual(s.phase,'enemy');await page.locator('#menu').click();await screenshot(page,'desktop-fire-at-will');mark('desktop fire at will in authored encounter',{ammo:s.ammo,kills:s.kills,phase:s.phase});
+    await page.getByRole('button',{name:'Choose operation, animal & loadout',exact:true}).click();assert.equal(await page.locator('#resume').isVisible(),true);await page.locator('#resume').click();s=await wait(page,s=>s.ready,'saved encounter');assert(s.autoFire);mark('desktop real operation save/resume');
   }else{
     const original=await snapshot(page);await tap(page,'#movement-cycle',true);assert((await snapshot(page)).player.sneaking);await tap(page,'#movement-cycle',true);assert(!(await snapshot(page)).player.sneaking);
     const stick=await page.locator('#joystick').boundingBox(),cx=stick.x+stick.width/2,cy=stick.y+stick.height/2,cdp=await context.newCDPSession(page);
@@ -75,6 +86,16 @@ try{
     await tap(page,'#grenade',true);await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:cx,y:cy}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:cx+49,y:cy-59}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
     const button=page.locator('#grenade');assert.equal(await button.isDisabled(),false);await tap(page,'#grenade',true);s=await wait(page,s=>s.player.ammo.grenade===2,'real touch grenade throw');await screenshot(page,'phone-grenade');mark('phone real grenade aim, release and confirmation');await cdp.detach();
   }
+  assert.equal(log.errors.length,0,JSON.stringify(log.errors));assert.equal(log.requests.length,0,JSON.stringify(log.requests));await context.close();
+ }
+ // A separate real loadout must auto-fire flame without entering manual cone aim.
+ {
+  const context=await browser.newContext({viewport:{width:800,height:600}}),page=await context.newPage(),log=capture(page,'flamethrower');activePage=page;
+  await context.addInitScript(installNativeProbe);await page.goto(`http://127.0.0.1:${port}/game.html`);
+  await page.locator('#animals button').filter({hasText:'Yakov'}).click();await page.getByRole('button',{name:'Backpack flamethrower',exact:true}).click();await page.locator('#deploy').click();
+  let s=await wait(page,s=>s.ready,'flamethrower renderer');assert(s.automatic);assert.equal(await page.locator('#realtime-aim').isDisabled(),true);assert.equal(await page.locator('#realtime-aim-label').textContent(),'AREA FIRE');assert.equal(await page.locator('#end-turn').isDisabled(),false);await page.locator('#end-turn').click();assert((await snapshot(page)).autoFire);
+  await moveTo(page,{x:19,y:23});await moveTo(page,{x:19,y:13.5});s=await wait(page,s=>s.player.ammo.flamethrower<4&&s.kills>0,'automatic flame burst',25000);
+  assert(s.autoFire);assert.equal(await page.locator('#flame-aim').isHidden(),true);assert.equal(s.shaderFailures,0);await screenshot(page,'flamethrower-fire-at-will');mark('flamethrower Fire at Will uses the production cone and fuel',{fuel:s.player.ammo.flamethrower,kills:s.kills});
   assert.equal(log.errors.length,0,JSON.stringify(log.errors));assert.equal(log.requests.length,0,JSON.stringify(log.requests));await context.close();
  }
  // The editor's default proving yard also uses the same real-time Core.

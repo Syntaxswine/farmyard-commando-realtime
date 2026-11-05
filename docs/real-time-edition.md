@@ -22,10 +22,16 @@ the operation selector and use real-time rules in this edition.
 - The former End Turn switch toggles **Hold Fire / Fire at Will**. Space does
   the same. Fire starts off. Hold the switch, or open Options → Fire control,
   for nearest, weakest (lowest current HP) and biggest-threat target priorities.
-- Automatic fire uses ordinary firearms only. Targets must be living detected
+- Automatic fire supports ordinary firearms and the flamethrower. Targets must be living detected
   hostiles in range, with a clear physical projectile path to the selected body
   location. Crates, desks, door leaves, glass and prop parts use the same impact
   query as the shot. Glass can be deliberately broken with point targeting.
+- Automatic flame uses the production 10 m, 48° cone and its exposure check,
+  rather than a bullet torso ray. It fires immediately when ready, then at most
+  one cone every three seconds, consuming one fuel charge per cone. Aim levels
+  and body locations do not apply. The aim control shows AREA FIRE; your firearm
+  aim setting is retained for weapon swaps. Empty tanks reload from carried fuel.
+  Manual cone aiming suspends automatic fire until you leave that aiming mode.
 - Keep the valid current target unless another improves the selected metric by
   20%. Tap an opponent to pin it and open the inherited green CRT controls.
   Release a pin from Fire control. A hidden/unreachable pinned target cannot be
@@ -46,7 +52,7 @@ the operation selector and use real-time rules in this edition.
 - An opening hit while sneaking against an unaware opponent deals 1.5 times
   damage. That hit alerts the victim; later hits do not regain the bonus merely
   by toggling Sneak. Explosive and flame damage do not get the gun/melee bonus.
-- Grenades, RPGs, flamethrowers and point shots remain deliberate. Grenade action
+- Grenades, RPGs and point shots remain deliberate. Grenade action
   recovery takes 1.2 seconds, halved with an equipped pistol or SMG. Area aiming
   suspends the player's automatic firearm, while enemies continue on the clock.
   Release aim input before confirming. Existing arc, blast, fuel, tank-explosion,

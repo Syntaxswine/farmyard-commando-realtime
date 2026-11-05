@@ -418,10 +418,10 @@ export function previewFlame(s,a,heading){
   const contacts=s.units.filter(u=>(u.team==='squad'||s.detected.has(u.id))&&s.visible.has(key(u.x,u.y))&&flameAffects(s,a,u,direction)).map(u=>({id:u.id,name:u.name,team:u.team}));
   return {ok:!reason,reason,cost:s.realtime?0:w.cost,range:w.range,spread:48,heading:direction,shape,contacts};
 }
-export function fireFlame(s,a,heading){return damageAction(s,a,'flamethrower',()=>{const ok=fireFlameNow(s,a,heading);if(ok&&s.realtime)realtimeRules.actor(s,a).cooldown=shotSeconds('flamethrower');return ok;});}
-function fireFlameNow(s,a,heading){
+export function fireFlame(s,a,heading,{keepMovement=false}={}){return damageAction(s,a,'flamethrower',()=>{const ok=fireFlameNow(s,a,heading,keepMovement);if(ok&&s.realtime)realtimeRules.actor(s,a).cooldown=shotSeconds('flamethrower');return ok;});}
+function fireFlameNow(s,a,heading,keepMovement=false){
   const p=previewFlame(s,a,heading);if(!p.ok)return false;
-  stop(s);if(s.phase!=='player'){s.engaged=true;refresh(s);}
+  if(!keepMovement)stop(s);if(s.phase!=='player'){s.engaged=true;refresh(s);}
   a.ap=Math.max(0,a.ap-p.cost);a.ammo.flamethrower--;syncAmmo(a,'flamethrower');a.heading=p.heading;
   const impactEvent={explosions:[]},fireBefore=s.fireAnimationSequence||0,windowBefore=s.windowSequence||0,flame=recordFlame(a,p.range,geometryNear(s,a,a,p.range,'flame'),s.visible),impacts=resolveFlame(s,a,impactEvent),angle=a.heading*Math.PI/180;
   log(s,`${a.name} fired a flamethrower cone (${p.cost} AP).`);
@@ -683,7 +683,7 @@ function realtimePlayerStep(s,dt,input){
   if(input&&Math.hypot(input.x,input.y)>.1){s.queue=[];const n=Math.max(1,Math.hypot(input.x,input.y));travel(s,u,input.x/n*movementSpeed(u)*dt,input.y/n*movementSpeed(u)*dt);}
   else if(s.queue.length){const p=s.queue[0],d=distance(u,p);if(d<.025)s.queue.shift();else{const step=Math.min(d,movementSpeed(u)*dt);if(!travel(s,u,(p.x-u.x)/d*step,(p.y-u.y)/d*step))s.queue=[];}}
 }
-const realtimeRules=createRealtimeRules({hero,alive,distance,canSee,confirmedImpact,previewAttack,attack:(s,a,...args)=>damageAction(s,a,a.weapon,()=>attackNow(s,a,...args)),completeReload:(s,u)=>reloadNow(s,u,true),travel,movePlayer:realtimePlayerStep,approachPath,refresh,log,fireRules});
+const realtimeRules=createRealtimeRules({hero,alive,distance,canSee,confirmedImpact,previewAttack,headingTo,flameAffects,previewFlame,fireFlame:(s,u,heading)=>fireFlame(s,u,heading,{keepMovement:true}),attack:(s,a,...args)=>damageAction(s,a,a.weapon,()=>attackNow(s,a,...args)),completeReload:(s,u)=>reloadNow(s,u,true),travel,movePlayer:realtimePlayerStep,approachPath,refresh,log,fireRules});
 export const enableRealtime=s=>realtimeRules.enable(s);
 export const configureRealtime=(s,changes)=>realtimeRules.configure(s,changes);
 export const pinRealtimeTarget=(s,id)=>realtimeRules.pin(s,id);
