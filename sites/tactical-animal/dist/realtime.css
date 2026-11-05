@@ -11,3 +11,8 @@ body[data-realtime='true'] #end-turn[data-lit='true'] .switch-legend { color:#ff
   .realtime-aim { height:30px; margin-bottom:3px; }
   .realtime-status,.realtime-target { margin-bottom:2px; font-size:8px; }
 }
+
+#overlay .shooting-bank[data-fire-modes='one'] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#overlay .shooting-bank[data-fire-modes='three'] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+#overlay .shooting-bank[data-fire-modes='three'] .industrial-switch { max-width: 100%; }
+.hold-trigger { touch-action: none; user-select: none; -webkit-touch-callout: none; }

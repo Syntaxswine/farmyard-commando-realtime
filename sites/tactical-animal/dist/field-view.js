@@ -252,7 +252,7 @@ export class FieldView {
         const points=Core.grenadeTrajectory({x:event.ax,y:event.ay},{x:event.bx,y:event.by}).map(p=>V(p.x,p.z,p.y));
         line=new T.Line(new T.BufferGeometry().setFromPoints(points),new T.LineBasicMaterial({color:0xf6d68c,transparent:true}));
       }else if(tracer)line=tracerMesh(event.weapon);
-      const visual={event,line,tracer,at,ttl:thrown?700:burst?BURST_TRACER_DURATION:240,started:!burst&&at<=now,
+      const visual={event,line,tracer,at,ttl:thrown?700:burst||event.fullAuto?BURST_TRACER_DURATION:240,started:!burst&&at<=now,
         previous:burst&&event.shot>0?previousRounds.get(event.shooter):null};
       (this.shotVisuals??=new Map()).set(event,visual);
       if(line){line.visible=at<=now;this.scene.add(line);}

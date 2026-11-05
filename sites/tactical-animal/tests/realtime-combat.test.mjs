@@ -65,6 +65,69 @@ test('aim adds proportional acquisition and shot intervals without per-shot sele
   const s=fixture(),u=hero(s),seconds=shotSeconds(u.weapon,aim);Core.configureRealtime(s,{autoFire:true,aim});advance(s,seconds-.05);assert.equal(u.ammo.assault,30,aim+' first delay');advance(s,.05);assert.equal(u.ammo.assault,29,aim+' first shot');advance(s,seconds);assert.equal(u.ammo.assault,28,aim+' next shot');
  }
 });
+test('automatic guns fire singles, three-round bursts and full auto at the selected cadence',()=>{
+ for(const primary of ['assault','smg','hmg']){
+  for(const [fireMode,rounds] of [['single',1],['burst',3]]){
+   const s=fixture({primary}),u=hero(s),loaded=u.ammo[primary],interval=shotSeconds(primary,'hip',fireMode);
+   assert(Core.configureRealtime(s,{autoFire:true,fireMode}));
+   advance(s,interval-.01);assert.equal(u.ammo[primary],loaded);
+   advance(s,.01);assert.equal(u.ammo[primary],loaded-rounds);
+   assert.equal(s.effect.sequence.filter(event=>event.shooter===u.id).length,rounds);
+  }
+  for(const aim of ['hip','aimed','full']){
+   const interval=shotSeconds(primary,aim,'auto');
+   assert(interval<shotSeconds(primary,aim,'single'));
+   for(const step of [.05,.017]){
+    const s=fixture({primary}),u=hero(s),loaded=u.ammo[primary];
+    assert(Core.configureRealtime(s,{autoFire:true,fireMode:'auto',aim}));
+    advance(s,interval*6+.002,null,step);
+    assert.equal(u.ammo[primary],loaded-6,primary+' '+aim+' '+step);
+    const shot=s.effect.sequence.findLast(event=>event.shooter===u.id);
+    assert(shot.fullAuto);assert.equal(shot.shots,1);
+   }
+  }
+ }
+});
+
+test('a held trigger fires repeatedly, a tap fires once, and a saved game never restores a hold',()=>{
+ const s=fixture(),u=hero(s),g=s.units[1];
+ assert(Core.pressRealtimeTrigger(s,u,g));
+ advance(s,.57);assert.equal(u.ammo.assault,26);assert(Core.realtimeStatus(s).triggerHeld);
+ const resumed=decodeSave(encodeSave(s));
+ assert(!Core.realtimeStatus(resumed).triggerHeld);
+ advance(resumed,.6);assert.equal(hero(resumed).ammo.assault,26);
+ assert(Core.releaseRealtimeTrigger(s,true));advance(s,.6);assert.equal(u.ammo.assault,26);
+ assert(Core.pressRealtimeTrigger(s,u,g));advance(s,.05);assert(Core.releaseRealtimeTrigger(s,true));
+ advance(s,.6);assert.equal(u.ammo.assault,25);
+ assert(Core.pressRealtimeTrigger(s,u,g));assert(Core.releaseRealtimeTrigger(s));advance(s,.6);assert.equal(u.ammo.assault,25);
+});
+
+test('old burst preferences and queued attacks load, and a sidearm keeps the automatic preference for later',()=>{
+ const s=fixture(),u=hero(s);
+ assert(Core.attack(s,u,s.units[1],true));advance(s,.4);assert.equal(u.ammo.assault,30);
+ const old=JSON.parse(encodeSave(s));delete old.realtime.fireMode;old.realtime.burst=true;
+ const manual=old.realtime.actors[u.id].manual;delete manual.fireMode;manual.burst=true;
+ const restored=decodeSave(JSON.stringify(old)),player=hero(restored);
+ assert.equal(Core.realtimeStatus(restored).fireMode,'burst');
+ advance(restored,.35);assert.equal(player.ammo.assault,27);
+ assert(Core.configureRealtime(restored,{fireMode:'auto'}));
+ assert(Core.equip(restored,player,'pistol'));
+ assert.equal(Core.realtimeStatus(restored).fireMode,'single');
+ assert.equal(Core.configureRealtime(restored,{fireMode:'auto'}),false);
+ assert.equal(Core.pressRealtimeTrigger(restored,player,restored.units[1]),false);
+ assert(Core.equip(restored,player,'assault'));
+ assert.equal(Core.realtimeStatus(decodeSave(encodeSave(restored))).fireMode,'auto');
+});
+
+test('three-round point bursts use the two remaining rounds before an ordinary timed reload',()=>{
+ const s=fixture(),u=hero(s),point={x:u.x+4,y:u.y,h:1,ground:true};
+ u.ammo.assault=2;
+ assert.equal(Core.previewPointAttack(s,u,point,true).rounds,2);
+ assert(Core.attack(s,u,point,true));advance(s,.75);assert.equal(u.ammo.assault,0);
+ assert.equal(s.effect.sequence.filter(event=>event.shooter===u.id).length,2);
+ advance(s,.05);assert(Core.realtimeStatus(s).reloading);
+});
+
 test('frame partitions preserve shot count and the simulation does not catch up unlimited wall time',()=>{
  const a=fixture(),b=fixture();Core.configureRealtime(a,{autoFire:true});Core.configureRealtime(b,{autoFire:true});advance(a,1,null,.02);advance(b,1,null,.05);assert.equal(hero(a).ammo.assault,hero(b).ammo.assault);
  const elapsed=a.elapsed;tick(a,30);assert(Math.abs(a.elapsed-elapsed-1)<1e-6);

@@ -75,23 +75,34 @@ try{
   await tap(page,'#realtime-aim',phone);assert.equal((await snapshot(page)).aim,'aimed');await tap(page,'#realtime-aim',phone);assert.equal((await snapshot(page)).aim,'full');await tap(page,'#realtime-aim',phone);
   await tap(page,'#end-turn',phone);assert((await snapshot(page)).autoFire);await tap(page,'#end-turn',phone);assert(!(await snapshot(page)).autoFire);mark(name+' persistent aim and fire-at-will controls');
   await tap(page,'#menu',phone);const paused=await snapshot(page);await page.waitForTimeout(250);assert.equal((await snapshot(page)).elapsed,paused.elapsed);await page.getByRole('button',{name:'Continue operation',exact:true}).click();mark(name+' inventory/options pause the actual simulation');
-  await tap(page,'#menu',phone);await page.getByRole('button',{name:'Fire control: aim & target priority',exact:true}).click();await page.getByRole('button',{name:'Target: Weakest',exact:true}).click();await page.getByRole('button',{name:'Return to operation',exact:true}).click();assert.equal((await snapshot(page)).priority,'weakest');mark(name+' persistent targeting priority through actual menu');
+  await tap(page,'#menu',phone);await page.getByRole('button',{name:'Fire control: mode, aim & target priority',exact:true}).click();await page.getByRole('button',{name:'Target: Weakest',exact:true}).click();
+  await page.getByRole('button',{name:'3-round burst',exact:true}).click();
+  await page.getByRole('button',{name:'Return to operation',exact:true}).click();
+  s=await snapshot(page);assert.equal(s.priority,'weakest');assert.equal(s.fireMode,'burst');
+  mark(name+' persistent fire mode and targeting priority through actual menu');
   if(!phone){
     // Automatic defence must already be armed when the deliberate point shot
     // alerts the guards, including while a slow renderer handles later controls.
     await page.locator('#end-turn').click();assert((await snapshot(page)).autoFire);
     // Real point-fire controls create a reload opportunity without injecting state.
-    await page.locator('#menu').click();await page.getByRole('button',{name:'Aim firearm at a point',exact:true}).click();await pointClick(page,{x:5,y:20,h:1.1});await page.getByRole('button',{name:/^Fire ·/}).click();
-    s=await wait(page,s=>s.ammo<30&&s.lastDischarge?.weapon==='assault','manual point shot');
+    await page.locator('#menu').click();await page.getByRole('button',{name:'Aim firearm at a point',exact:true}).click();await pointClick(page,{x:5,y:20,h:1.1});
+    assert.equal(await page.locator('[data-control="burst"]').getAttribute('aria-pressed'),'true');
+    assert(await page.locator('[data-control="single"]').isVisible());
+    await page.locator('[data-control="auto"]').click();
+    const fire=page.locator('[data-control="fire"]'),box=await fire.boundingBox();
+    assert(await fire.isEnabled());await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();
+    try{s=await wait(page,s=>s.triggerHeld&&s.ammo<=27&&s.lastDischarge?.weapon==='assault','held full-auto point fire');}
+    finally{await page.mouse.up();}
+    assert(!(await snapshot(page)).triggerHeld);assert.equal(s.fireMode,'auto');
     assert(s.lastDischarge.tracerVertices>0&&s.lastDischarge.fromMuzzle&&s.lastDischarge.flash&&s.lastDischarge.pose,JSON.stringify(s.lastDischarge));
     await waitForShotAudio(page,'ak47-shot');
-    mark('a real point shot plays its recorded report and draws a posed muzzle flash and tracer',s.lastDischarge);
+    mark('the held full-auto trigger spends several rounds with native sound and tracer feedback',s.lastDischarge);
     await page.locator('#menu').click();const reserveBefore=(await snapshot(page)).reserve;await page.getByRole('button',{name:/^Reload AK-47/}).click();s=await wait(page,s=>s.reloading,'timed reload');assert(s.ammo<30);const before=s.player;
     await page.keyboard.down('a');try{s=await wait(page,s=>Math.hypot(s.player.x-before.x,s.player.y-before.y)>.1,'held movement during reload',8000);}finally{await page.keyboard.up('a');}await screenshot(page,'desktop-reload-moving');await wait(page,s=>!s.reloading&&s.reserve<reserveBefore,'completed reload');mark('desktop real shot, timed reload, reserve consumption and movement');
     // The point shot already alerted the guards. Hold the covered arrival area
     // and let them approach; pause immediately after the automatic engagement.
     s=await wait(page,s=>s.kills>0||s.ammo<30,'automatic engagement',25000);assert(s.autoFire);assert.notEqual(s.phase,'enemy');await page.locator('#menu').click();await screenshot(page,'desktop-fire-at-will');mark('desktop fire at will in authored encounter',{ammo:s.ammo,kills:s.kills,phase:s.phase});
-    await page.getByRole('button',{name:'Choose operation, animal & loadout',exact:true}).click();assert.equal(await page.locator('#resume').isVisible(),true);await page.locator('#resume').click();s=await wait(page,s=>s.ready,'saved encounter');assert(s.autoFire);mark('desktop real operation save/resume');
+    await page.getByRole('button',{name:'Choose operation, animal & loadout',exact:true}).click();assert.equal(await page.locator('#resume').isVisible(),true);await page.locator('#resume').click();s=await wait(page,s=>s.ready,'saved encounter');assert(s.autoFire);assert.equal(s.fireMode,'auto');assert(!s.triggerHeld);mark('desktop real operation save/resume');
   }else{
     const original=await snapshot(page);await tap(page,'#movement-cycle',true);assert((await snapshot(page)).player.sneaking);await tap(page,'#movement-cycle',true);assert(!(await snapshot(page)).player.sneaking);
     const stick=await page.locator('#joystick').boundingBox(),cx=stick.x+stick.width/2,cy=stick.y+stick.height/2,cdp=await context.newCDPSession(page);
@@ -112,8 +123,32 @@ try{
   assert(s.autoFire);assert.equal(await page.locator('#flame-aim').isHidden(),true);assert.equal(s.shaderFailures,0);await waitForShotAudio(page,'flame-ignite');await screenshot(page,'flamethrower-fire-at-will');mark('flamethrower Fire at Will uses the production cone and fuel',{fuel:s.player.ammo.flamethrower,kills:s.kills});
   assert.equal(log.errors.length,0,JSON.stringify(log.errors));assert.equal(log.requests.length,0,JSON.stringify(log.requests));await context.close();
  }
- // The editor's default proving yard also uses the same real-time Core.
- const context=await browser.newContext({viewport:{width:1000,height:800}}),page=await context.newPage(),log=capture(page,'window-yard');await page.goto(`http://127.0.0.1:${port}/window-yard.html`);await page.waitForFunction(()=>document.querySelector('#loading').hidden);assert.match(await page.locator('#status').textContent(),/Real time/);await screenshot(page,'real-time-proving-yard');assert.equal(log.errors.length,0);mark('editor proving yard production real-time bootstrap');await context.close();report.success=true;
+ // The editor's proving yard uses the same mode and held-trigger rules.
+ const context=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true}),page=await context.newPage(),log=capture(page,'window-yard');
+ await page.goto(`http://127.0.0.1:${port}/window-yard.html`);
+ await page.waitForFunction(()=>document.querySelector('#loading').hidden);assert.match(await page.locator('#status').textContent(),/Real time/);
+ await page.locator('#fire-mode').selectOption('auto');
+ const yardAmmo=page=>page.evaluate(async()=>{
+   const entry=await import(document.querySelector('script[src*="window-yard.js"]').src);
+   return entry.inspectWindowYard().units[0].ammo.assault;
+ });
+ const pane=await page.evaluate(async()=>{
+   const entry=await import(document.querySelector('script[src*="window-yard.js"]').src);
+   return entry.projectWindowYard({x:20,y:21.5,h:1.05});
+ });
+ assert(pane.visible);await page.touchscreen.tap(pane.x,pane.y);
+ const trigger=page.locator('#fire'),touch=await trigger.boundingBox(),cdp=await context.newCDPSession(page);
+ assert(await trigger.isEnabled(),await page.locator('#message').textContent());
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:touch.x+touch.width/2,y:touch.y+touch.height/2}]});
+ try{await page.waitForFunction(async()=>{
+   const entry=await import(document.querySelector('script[src*="window-yard.js"]').src);
+   return entry.inspectWindowYard().units[0].ammo.assault<=27;
+ },null,{timeout:15000});}
+ finally{await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});}
+ await page.waitForFunction(()=>document.querySelector('#fire').disabled);
+ const left=await yardAmmo(page);await page.waitForTimeout(550);assert.equal(await yardAmmo(page),left);
+ await screenshot(page,'real-time-proving-yard');assert.equal(log.errors.length,0,JSON.stringify(log.errors));assert.equal(log.requests.length,0,JSON.stringify(log.requests));
+ mark('editor proving yard uses production full auto and stops on touch release',{ammo:left});await cdp.detach();await context.close();report.success=true;
 }catch(error){report.failure=error.stack||String(error);if(activePage&&!activePage.isClosed()){try{report.failureSnapshot=await snapshot(activePage);await screenshot(activePage,'failure');}catch{}}process.exitCode=1;console.error(error.stack||error);}
 finally{await close();}
 if(report.success)console.log('Real-time native acceptance passed; disposable helpers stopped.');

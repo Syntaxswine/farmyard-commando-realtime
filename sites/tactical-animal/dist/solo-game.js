@@ -361,12 +361,16 @@ function throwGrenadeNow(s,u,point){
   s.effect={sequence:[{shooter:u.id,ax:u.x,ay:u.y,bx:point.x,by:point.y,hit:hits>0,weapon:'grenade',blast:p.blast,...impactEvent,windowSequences:windowReceipts(s,windowBefore),fireSequences:(s.fireAnimations||[]).filter(e=>e.sequence>fireBefore).map(e=>e.sequence)}]};
   refresh(s);return true;
 }
+function attackRounds(s,u,w,burst){
+  const requested=burst&&w?.burstRounds?w.burstRounds:1;
+  return s.realtime&&w?.mag?Math.min(requested,Math.max(1,u.ammo[u.weapon]||0)):requested;
+}
 export function previewAttack(s,a,b,burst=false,zone='torso',token=null,aimLevel='hip'){
   if(b?.ground)return previewPointAttack(s,a,b,burst,aimLevel);
   if(!alive(a)||!alive(b)||a.team===b.team)return {ok:false,reason:'Choose a living opponent'};
   if(a.weapon==='grenade'){if(!s.detected.has(b.id))return {ok:false,reason:'Target is not visible'};return {...previewGrenade(s,a,b),chance:100,rounds:1,cover:0};}
   const w=WEAPONS[a.weapon],aim=w&&shotAim(w,aimLevel,burst);if(!aim)return {ok:false,reason:'Choose an aim level'};
-  const cost=s.realtime?0:aim.cost,d=distance(a,b),requested=burst&&w.burstRounds?w.burstRounds:1,rounds=s.realtime&&w.mag?Math.min(requested,Math.max(1,a.ammo[a.weapon]||0)):requested;
+  const cost=s.realtime?0:aim.cost,d=distance(a,b),rounds=attackRounds(s,a,w,burst);
   let reason='';
   if(a.team==='squad'&&!s.detected.has(b.id))reason='Target is not visible';
   else if(a.burningTurns)reason='On fire: running in panic';
@@ -441,7 +445,7 @@ function windowBlast(s,origin,radius,options={}){
   if(events.length)geometryCache.delete(s);return events;
 }
 export function previewPointAttack(s,a,point,burst=false,aimLevel='hip'){
-  const w=WEAPONS[a?.weapon],aim=w&&shotAim(w,aimLevel,burst),rounds=burst&&w?.burstRounds?w.burstRounds:1,d=point?distance(a,point):Infinity;
+  const w=WEAPONS[a?.weapon],aim=w&&shotAim(w,aimLevel,burst),rounds=attackRounds(s,a,w,burst),d=point?distance(a,point):Infinity;
   const placed=point?.windowId!==undefined?windowSystem.compile(s).find(r=>r.placement.id===point.windowId):null,ceiling=placed?.spec.height??2;
   let reason='';
   if(!canControl(s,a))reason='Wait for your turn';
@@ -705,4 +709,6 @@ export const configureRealtime=(s,changes)=>realtimeRules.configure(s,changes);
 export const pinRealtimeTarget=(s,id)=>realtimeRules.pin(s,id);
 export const realtimeStatus=s=>s.realtime?realtimeRules.status(s):null;
 export const realtimeTarget=s=>s.realtime?realtimeRules.choose(s):null;
-export const Core={enableRealtime,configureRealtime,pinRealtimeTarget,realtimeStatus,realtimeTarget,tankExplosionChance,ignite,enterFire,WEAPONS,AIM_ZONES,key,alive,movementModeOf,movementRate,movementSpeed,combatCosts,canControl,canSee,visibleOpponents,refresh,log,stop,travel,navigationPath,move,turnTo,setMovementMode,setStance,grenadeCost,grenadeTrajectory,grenadeAffects,grenadeBlastFootprint,previewGrenade,throwGrenade,previewFlame,fireFlame,previewPointAttack,previewAttack,attack,equip,reload,endTurn,headingTo,interactionObjects,nearbyInteractions,previewInteraction,performInteraction,restoreRuntimeSystems};
+const pressRealtimeTrigger=(s,u,target,zone,aim)=>realtimeRules.pressTrigger(s,u,target,zone,aim);
+const releaseRealtimeTrigger=(s,tap)=>realtimeRules.releaseTrigger(s,tap);
+export const Core={enableRealtime,configureRealtime,pinRealtimeTarget,realtimeStatus,realtimeTarget,pressRealtimeTrigger,releaseRealtimeTrigger,tankExplosionChance,ignite,enterFire,WEAPONS,AIM_ZONES,key,alive,movementModeOf,movementRate,movementSpeed,combatCosts,canControl,canSee,visibleOpponents,refresh,log,stop,travel,navigationPath,move,turnTo,setMovementMode,setStance,grenadeCost,grenadeTrajectory,grenadeAffects,grenadeBlastFootprint,previewGrenade,throwGrenade,previewFlame,fireFlame,previewPointAttack,previewAttack,attack,equip,reload,endTurn,headingTo,interactionObjects,nearbyInteractions,previewInteraction,performInteraction,restoreRuntimeSystems};

@@ -42,3 +42,39 @@ export function bindPressHold(button,{tap,hold,canUse,press=()=>{},delay=450}){
   });
   globalThis.addEventListener?.('blur',cancel);
 }
+
+// Pointer and keyboard holds use the same trigger. A native click remains
+// available for assistive input and for controls that only fire on a tap.
+export function bindHeldTrigger(button,{press,release,tap}){
+  let pointer=null,key=null,suppressClick=false;
+  const finish=commit=>{
+    if(pointer===null&&key===null)return;
+    const id=pointer;pointer=key=null;
+    if(id!==null&&button.hasPointerCapture(id))button.releasePointerCapture(id);
+    release(commit);
+  };
+  button.addEventListener('pointerdown',event=>{
+    if(event.button!==0||button.disabled||pointer!==null||key!==null)return;
+    suppressClick=false;
+    if(!press())return;
+    pointer=event.pointerId;suppressClick=true;
+    button.setPointerCapture(pointer);event.preventDefault();
+  });
+  button.addEventListener('pointerup',event=>{if(event.pointerId===pointer)finish(true);});
+  for(const name of ['pointercancel','lostpointercapture'])button.addEventListener(name,event=>{if(event.pointerId===pointer)finish(false);});
+  button.addEventListener('keydown',event=>{
+    if(button.disabled||![' ','Enter'].includes(event.key))return;
+    if(key===event.key){event.preventDefault();return;}
+    if(event.repeat||pointer!==null||key!==null||!press())return;
+    key=event.key;event.preventDefault();
+  });
+  button.addEventListener('keyup',event=>{if(event.key===key){event.preventDefault();finish(true);}});
+  button.addEventListener('blur',()=>{if(key!==null)finish(false);});
+  button.addEventListener('contextmenu',event=>{if(pointer!==null)event.preventDefault();});
+  button.onclick=event=>{
+    if(pointer!==null||key!==null)return;
+    if(suppressClick&&event.detail!==0){suppressClick=false;event.preventDefault();return;}
+    if(!button.disabled)tap();
+  };
+  return ()=>finish(false);
+}
