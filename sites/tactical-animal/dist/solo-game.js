@@ -1,4 +1,4 @@
-import {createRealtimeRules,validateRealtime,awardRealtimeKill,shotSeconds,grenadeSeconds} from './realtime-combat.js';
+import {createRealtimeRules,validateRealtime,awardRealtimeKill,shotSeconds,grenadeSeconds,FIRE_MODES} from './realtime-combat.js';
 import {boundedElapsed,SIMULATION_STEP_SECONDS} from './frame-timing.js';
 import {TOUR_ID,getTourWorld,bindTourWorld,isTour} from './mount-dora-activity.js';
 import {encodeTourProgress} from './mount-dora-progress.js';
@@ -42,7 +42,11 @@ export const movementSpeed=u=>u.realtimeMovement?(u.stance==='prone'?3.6:u.stanc
 export const combatCosts=s=>!s.realtime&&(['player','enemy'].includes(s.phase)||s.units.some(g=>g.team==='guard'&&alive(g)&&g.alert));
 export const canControl=(s,u)=>alive(u)&&!u.burningTurns&&u.team==='squad'&&['explore','player','won'].includes(s.phase)&&s.solo.status==='active';
 export function validBuild(b){return !!b&&ANIMALS.some(a=>a.id===b.animal)&&PRIMARY.includes(b.primary)&&SECONDARY.includes(b.secondary)&&UTILITIES.includes(b.utility);}
-export function normalizeBuild(b){return validBuild(b)?{animal:b.animal,primary:b.primary,secondary:b.secondary,utility:b.utility}:{...DEFAULT_BUILD};}
+export function normalizeBuild(b){
+  if(!validBuild(b))return {...DEFAULT_BUILD};
+  const {animal,primary,secondary,utility,fireMode}=b;
+  return {animal,primary,secondary,utility,...(FIRE_MODES.includes(fireMode)?{fireMode}:{})};
+}
 export function buildStats(b){const p=ANIMALS.find(a=>a.id===b.animal),u={team:'squad',name:p.name};initializeStats(u,p.stats);return u;}
 export function log(s,message){s.log.unshift(message);s.log=s.log.slice(0,35);s.revision++;}
 function makeUnit(id,team,name,species,weapon,x,y,heading,stats){const u={id,team,name,species,weapon,x,y,z:0,heading,stance:'standing',running:false,sneaking:false,travelled:0,isMoving:false,alert:false,lastKnown:null,alertAge:0,slots:[weapon],pack:[],ammo:{[weapon]:WEAPONS[weapon].mag},ammoPouch:{[weapon]:WEAPONS[weapon].mag*3}};initializeStats(u,stats);return u;}

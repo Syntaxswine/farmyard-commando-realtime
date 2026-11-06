@@ -1,4 +1,4 @@
-import {fireModesFor,shotSeconds,grenadeSeconds,WEAPON_TIMING} from './realtime-combat.js';
+import {DEFAULT_FIRE_MODE,fireModesFor,shotSeconds,grenadeSeconds,WEAPON_TIMING} from './realtime-combat.js';
 import {createRealtimeCareers} from './realtime-progression.js';
 import {pointInWorldRect} from './world-grid.js';
 import {FrameClock} from './frame-timing.js';
@@ -118,10 +118,25 @@ function renderMissionPreparation(){
 function renderPrep(){renderMissionPreparation();const p=ANIMALS.find(a=>a.id===build.animal),stats=buildStats(build);$('hero-portrait').src=`aft/assets/characters/armed/${p.species}-rifle.png`;$('hero-portrait').alt=`${p.name}, the ${speciesLabel(p.species)} worker`;$('hero-name').textContent=p.name;$('hero-species').textContent=speciesLabel(p.species);$('hero-role').textContent=p.label;document.querySelector('.portrait-number').textContent=String(ANIMALS.indexOf(p)+1).padStart(2,'0');$('stats').innerHTML=[['HEALTH',stats.maxHp],[REALTIME?'FIREARMS':'ACTION POINTS',REALTIME?stats.stats.firearms:stats.maxAp],['PERCEPTION',stats.perception]].map(([label,value])=>`<div class="stat"><strong>${value}</strong><span>${label}</span></div>`).join('');
   $('animals').replaceChildren();for(const a of ANIMALS)button($('animals'),`<strong>${speciesLabel(a.species)}</strong><small>${a.name}</small>`,'animal-choice',a.id===build.animal,()=>{build.animal=a.id;renderPrep();});
   if(!loadoutChoices){loadoutChoices=[];
-    $('primary').replaceChildren();for(const k of PRIMARY){const w=Core.WEAPONS[k],choice=button($('primary'),`<strong>${w.short}</strong><small>${REALTIME?shotSeconds(k).toFixed(2)+' s':w.cost+' AP'} / ${w.range} m / ${w.mag} rounds</small>`,'weapon-choice',false,()=>{build.primary=k;renderPrep();});choice.setAttribute('aria-label',w.name);const art=weaponArtwork(k,35);art.classList.add('weapon-paint');choice.append(art);loadoutChoices.push({choice,slot:'primary',kind:k});}
+    $('primary').replaceChildren();
+    for(const kind of PRIMARY){
+      const w=Core.WEAPONS[kind],choice=button($('primary'),`<strong>${w.short}</strong>`,'weapon-choice',false,()=>{build.primary=kind;renderPrep();});
+      const details=document.createElement('small'),art=weaponArtwork(kind,35);
+      choice.setAttribute('aria-label',w.name);art.classList.add('weapon-paint');choice.append(details,art);
+      loadoutChoices.push({choice,slot:'primary',kind,details});
+    }
     $('secondary').replaceChildren();for(const k of SECONDARY){const choice=button($('secondary'),`<span>${short(k)}</span><small>${k==='knife'?'MELEE':'8 ROUNDS'}</small>`,'small-choice',false,()=>{build.secondary=k;renderPrep();});const art=weaponArtwork(k,22);art.classList.add('sidearm-paint');choice.prepend(art);loadoutChoices.push({choice,slot:'secondary',kind:k});}
   }
-  for(const {choice,slot,kind}of loadoutChoices)choice.setAttribute('aria-pressed',String(build[slot]===kind));
+  const fireMode=build.fireMode??DEFAULT_FIRE_MODE;
+  $('loadout-fire-mode-picker').hidden=!REALTIME||fireModesFor(build.primary).length===1;
+  $('loadout-fire-mode').value=fireMode;
+  for(const {choice,slot,kind,details}of loadoutChoices){
+    choice.setAttribute('aria-pressed',String(build[slot]===kind));
+    if(details){
+      const w=Core.WEAPONS[kind],timing=REALTIME?shotSeconds(kind,'hip',fireMode).toFixed(2)+' s':w.cost+' AP';
+      details.textContent=`${timing} / ${w.range} m / ${w.mag} rounds`;
+    }
+  }
   $('utility').replaceChildren();for(const [k,label,detail] of [['dressing','Field dressing','×2'],['grenade','Frag grenades','×3']])button($('utility'),`<span>${label}</span><small>${detail}</small>`,'small-choice',k===build.utility,()=>{build.utility=k;renderPrep();});
   const skill=['hmg','rpg','flamethrower'].includes(build.primary)?'heavyWeapons':'firearms';$('primary-summary').textContent=`${skill==='firearms'?'FIREARMS':'HEAVY WEAPONS'} ${p.stats[skill]}`;$('equipment-note').textContent=`${Core.WEAPONS[build.primary].name}. ${p.name}'s ${skill==='firearms'?'firearms':'heavy weapons'} skill: ${p.stats[skill]}/100. ${REALTIME?'Standing runs by default. Crouch and crawl are slower; Sneak halves your pace.':'Movement spends AP by distance, with no tile snapping.'}`;$('build-summary').textContent=`${p.name} / ${speciesLabel(p.species)} · ${short(build.primary)} + ${short(build.secondary)}`;
   try{
@@ -132,6 +147,10 @@ function renderPrep(){renderMissionPreparation();const p=ANIMALS.find(a=>a.id===
   preparationBuilds[selectedMissionId]=normalizeBuild(build);
   try{operationStorage.savePreparation(selectedMissionId,build);}catch(error){storageWriteFailure('preparation changes',error);}
 }
+$('loadout-fire-mode').onchange=()=>{
+  const mode=$('loadout-fire-mode').value;
+  if(REALTIME&&fireModesFor(build.primary).includes(mode)){build.fireMode=mode;renderPrep();}
+};
 $('operation-select').onchange=()=>{
   tourLaunchAbort?.abort();$('tour-launch-status').hidden=true;
   try{selectedMissionId=getMission($('operation-select').value).id;build=normalizeBuild(preparationBuilds[selectedMissionId]);renderPrep();}catch(error){toast(error.message);}
@@ -179,7 +198,9 @@ function start(s,{resume=false}={}){try{
   if(REALTIME)Core.enableRealtime(s);
   if(state&&state!==s)storage.write();cancelAreaAim();resetStick();keys.clear();if(picker.open)closePicker();
   guardAlert.stop();guardContacts.reset([...(Array.isArray(s.solo.spottedGuardIds)?s.solo.spottedGuardIds:[]),...(resume?Core.visibleOpponents(s).map(guard=>guard.id):[])]);s.solo.spottedGuardIds=guardContacts.ids();
-  view?.dispose();if(state!==s)getTourWorld(state)?.dispose();tourArtError=null;$('loading').textContent=isTour(s)?'Preparing the town…':'Preparing the field…';$('loading').hidden=false;state=s;selectedMissionId=s.solo.missionId;build=normalizeBuild(s.solo.build);Core.stop(s);delete s.effect;
+  view?.dispose();if(state!==s)getTourWorld(state)?.dispose();tourArtError=null;$('loading').textContent=isTour(s)?'Preparing the town…':'Preparing the field…';$('loading').hidden=false;state=s;selectedMissionId=s.solo.missionId;build=normalizeBuild(s.solo.build);
+  if(REALTIME&&resume)build.fireMode=preparationBuilds[selectedMissionId]?.fireMode??DEFAULT_FIRE_MODE;
+  Core.stop(s);delete s.effect;
   pointTargeting=false;selected=null;interactionFocus=null;handTarget=null;grenadeAim.cancel();flameAim.cancel();lastHeldWeapon=hero(s).weapon;areaPress=false;aimViewport=null;contextKey='';resultShown=false;stanceDirection=1;movementDirection=-1;aim='hip';zone='torso';burst=false;
   $('prep').hidden=true;$('battle').hidden=false;document.body.classList.add('in-battle');active=true;paused=false;
   view=new FieldView($('viewport'),{onPick:pick,getAimViewport:grenadeViewport,onLoading:busy=>{$('loading').hidden=!busy;frameClock.reset(busy?null:performance.now());},onError:message=>{if(isTour(state))tourArtError=message;$('loading').hidden=false;$('loading').textContent='Animal artwork could not load. '+message;}});
@@ -565,27 +586,44 @@ $('look').onclick=()=>{
 };
 $('zoom-in').onclick=()=>view?.zoom(.83);$('zoom-out').onclick=()=>view?.zoom(1.2);
 function weaponSwapCost(u,kind){return Core.combatCosts(state)?u.slots.includes(kind)?2:3:0;}
+function fireModeActions(u,selected,reopen){
+  const modes=fireModesFor(u.weapon);
+  return modes.length>1?modes.map(mode=>[fireModeNames[mode]+(mode===selected?' · selected':''),()=>{
+    Core.configureRealtime(state,{fireMode:mode});reopen();
+  }]):[];
+}
+function realtimeWeaponCommands(u,status,can){
+  const w=Core.WEAPONS[u.weapon];
+  return [
+    ['Aim firearm at a point',selectPointTarget,'',!can||!w.mag||w.incendiary||w.thrown],
+    [`Reload ${short(u.weapon)} · ${WEAPON_TIMING[u.weapon].reload} s`,()=>act(()=>Core.reload(state,u)),'',
+      !can||status.reloading||!w.mag||w.thrown||status.ammo>=w.mag||!status.reserve]
+  ];
+}
 function equipment(){
-  const u=hero(state),can=Core.canControl(state,u);
-  showDialog(`<p class="eyebrow">${u.name.toUpperCase()} / INVENTORY</p><h2>Equipment.</h2><p>${state.realtime?'Real-time equipment · reloads use carried ammunition.':'Stamina off · '+u.ap.toFixed(1)+' AP remaining.'}</p>`,[
+  const u=hero(state),can=Core.canControl(state,u),status=Core.realtimeStatus(state);
+  if(status)storage.write();
+  const caption=status?'Weapons.':'Equipment.';
+  const detail=status?fireModesFor(u.weapon).length>1?'Fire mode applies to manual fire and Fire at Will.':'Reloads use carried ammunition.':'Stamina off · '+u.ap.toFixed(1)+' AP remaining.';
+  showDialog(`<p class="eyebrow">${u.name.toUpperCase()} / ${status?'ARMAMENT':'INVENTORY'}</p><h2>${caption}</h2><p>${detail}</p>`,[
+    ...(status?[['Return to operation',()=>{},'primary'],...fireModeActions(u,status.fireMode,equipment),...realtimeWeaponCommands(u,status,can)]:[]),
     ...u.pack.map(i=>{
-
       if(i.kind==='grenade')return [`Select grenades · ${u.ammo.grenade||0} remaining${areaWeapon()==='grenade'?' · active':''}`,()=>selectAreaWeapon('grenade'),'',!can];
       const cost=weaponSwapCost(u,i.kind);
       const label=`${Core.WEAPONS[i.kind].name}${Core.WEAPONS[i.kind].mag?' · '+(u.ammo[i.kind]??0)+' loaded / '+(u.ammoPouch[i.kind]||0)+' reserve':''}${u.weapon===i.kind?' · equipped':cost?' · '+cost+' AP':''}`;
       return [label,()=>act(()=>Core.equip(state,u,i.kind)),'',!can||u.weapon===i.kind||u.ap<cost];
     }),
     [`Use field dressing ×${state.solo.dressings}${Core.combatCosts(state)?' · 3 AP':''}`,()=>act(()=>dressing(state)),'',!can||!state.solo.dressings||u.hp===u.maxHp||Core.combatCosts(state)&&u.ap<3],
-    ['Back to menu',operationMenu],['Return to operation',()=>{},'primary']
+    ['Back to menu',operationMenu],...(!status?[['Return to operation',()=>{},'primary']]:[])
   ]);
 }
+$('weapons').onclick=()=>{if(state?.realtime&&!paused)equipment();};
 function weaponActions(inventoryLabel='Inventory & weapons'){
   const u=hero(state),w=Core.WEAPONS[u.weapon],can=Core.canControl(state,u),costs=Core.combatCosts(state),other=u.weapon===state.solo.build.primary?state.solo.build.secondary:state.solo.build.primary,swapCost=weaponSwapCost(u,other),actionCost=costs?' · 3 AP':'';
   if(state.realtime){const status=Core.realtimeStatus(state);return [[inventoryLabel,equipment],
-    ['Aim firearm at a point',selectPointTarget,'',!can||!w.mag||w.incendiary||w.thrown],
+    ...realtimeWeaponCommands(u,status,can),
     [`Area weapon: ${areaNames[areaWeapon()]} · Change`,openAreaPicker,'',!can],
     [`Switch to ${short(other)} · 0.55 s`,()=>act(()=>Core.equip(state,u,other)),'',!can],
-    [`Reload ${short(u.weapon)} · ${WEAPON_TIMING[u.weapon].reload} s`,()=>act(()=>Core.reload(state,u)),'',!can||status.reloading||!w.mag||u.ammo[u.weapon]>=w.mag||!status.reserve],
     [`Use field dressing ×${state.solo.dressings}`,()=>act(()=>dressing(state)),'',!can||!state.solo.dressings||u.hp===u.maxHp],
     [`Throw grenade ×${u.ammo.grenade||0} · ${grenadeSeconds(u)} s`,armGrenade,'',!can||!(u.ammo.grenade>0)]];}
   return [[inventoryLabel,equipment],
@@ -729,7 +767,7 @@ function renderRealtimeBattle(){
   trigger.setAttribute('aria-label',`${r.autoFire?'Fire at will on. Hold fire':'Hold fire. Enable fire at will'}. Hold for fire mode, aim and target priority.`);
   trigger.title=r.automatic?'Space: toggle fire at will. Hold for firing settings.':'This weapon uses deliberate area or point targeting.';
   $('turn-label').innerHTML=r.autoFire?'FIRE AT<br>WILL':'HOLD<br>FIRE';
-  $('realtime-aim').hidden=false;$('realtime-aim').disabled=!!w.incendiary||!Core.canControl(state,u)||aiming();
+  $('realtime-tools').hidden=false;$('realtime-aim').disabled=!!w.incendiary||!Core.canControl(state,u)||aiming();
   $('realtime-aim-label').textContent=w.incendiary?'AREA FIRE':aimNames[r.aim];$('realtime-aim').setAttribute('aria-label',w.incendiary?'Flamethrower area fire. One cone every 3 seconds. No aiming required.':`Aim: ${aimNames[r.aim].toLowerCase()}. Tap to change aim level.`);
   $('ap').textContent=String(r.ammo);$('ap-label').textContent=w.mag?'ROUNDS':'MELEE';
   $('realtime-status').textContent=r.reloading?`RELOADING ${r.remaining.toFixed(1)}s · ${r.reserve} SPARE`:`${w.short}${fireModesFor(u.weapon).length>1?' · '+fireModePaint[r.fireMode]:''} · ${r.ammo}/${w.mag} · ${r.reserve} SPARE`;
@@ -740,10 +778,10 @@ function renderRealtimeBattle(){
 }
 function fireSettings(){
   if(!state?.realtime)return;storage.write();
-  const u=hero(state),r=state.realtime,mode=Core.realtimeStatus(state).fireMode,modes=fireModesFor(u.weapon);
+  const u=hero(state),r=state.realtime,mode=Core.realtimeStatus(state).fireMode;
   showDialog('<p class="eyebrow">FIRE CONTROL / PAUSED</p><h2>Choose your commitment.</h2><p>Fire mode, aim and target priority stay selected between shots. Your animal only fires at detected hostiles with a clear firing path. The flamethrower fires one cone every 3 seconds with no aiming, using its fuel supply. Moving reduces firearm accuracy.</p>',[
     [r.autoFire?'Hold fire':'Enable fire at will',()=>act(()=>Core.configureRealtime(state,{autoFire:!r.autoFire})),'primary'],
-    ...(modes.length>1?modes.map(value=>[fireModeNames[value]+(mode===value?' · selected':''),()=>{Core.configureRealtime(state,{fireMode:value});fireSettings();}]):[]),
+    ...fireModeActions(u,mode,fireSettings),
     ...(Core.WEAPONS[u.weapon].incendiary?[]:['hip','aimed','full'].map(value=>[`${aimNames[value]} · ×${value==='hip'?'1':value==='aimed'?'1.5':'2'} shot interval${r.aim===value?' · selected':''}`,()=>{Core.configureRealtime(state,{aim:value});fireSettings();}])),
     ...['nearest','weakest','threat'].map(value=>[`Target: ${priorityNames[value]}${r.priority===value?' · selected':''}`,()=>{Core.configureRealtime(state,{priority:value});fireSettings();}]),
     ['Release pinned target',()=>{Core.pinRealtimeTarget(state,null);fireSettings();},'',r.pinnedId===null],
@@ -760,7 +798,7 @@ function realtimeMenu(){
     ['Restart this operation',()=>isTour(state)?launchTour():start(createSoloGame(state.solo.build,1947,state.solo.missionId))]
   ]);
 }
-function realtimeHelp(){showDialog('<p class="eyebrow">REAL-TIME FIELD NOTES</p><h2>Move. Conceal. Commit.</h2><p>Joystick, WASD or arrows move. Standing runs by default; crouching and crawling are slower. Sneak halves the speed of your posture. Stance switches remain free and bounce through kneeling.</p><p>The top right button toggles Hold Fire / Fire at Will (Space). Hold it to choose your fire mode and nearest, weakest or biggest-threat priority. Tap the aim button above the joystick (Q) to cycle hip fire, aimed and full aim. Higher aim takes longer, including before the first shot. A valid current target stays selected unless a substantially better target appears.</p><p>Tap an opponent for the original CRT body-location and manual firing controls, and to pin that target. Automatic guns have Single, 3-round Burst and Full Auto. Tap Fire for one shot or one burst. In Full Auto, hold Fire to keep firing and release to stop. Fire at Will uses the same mode. Empty guns automatically reload from your finite reserve; R or Options reloads early. You can move while reloading. Options and other dialogs pause the whole encounter; switching away also pauses without catching up later.</p><p>Grenades (G), flamethrowers (F), point shots, doors, loot and treatment retain their production controls. Area aiming suspends your automatic gunfire while enemies continue acting. Release the joystick before confirming a throw or flame burst. Flamethrowers also work with Fire at Will: one cone every 3 seconds, with no aiming. They use their normal cone, fuel and reload rules. Explosive weapons remain deliberate.</p><p>An opening hit while sneaking against an unaware opponent deals ×1.5 damage. Noise gives guards a place to investigate; friendly gunfire shares the shooter’s last known opponent position. Guards search after reaching that area, rather than forgetting mid-route. Kills earn the weapon skill XP; stealth kills also earn Sneak XP. First improvement: 3 kills in that skill, then progressively more.</p>',[['Back to menu',realtimeMenu],['Return to operation',()=>{},'primary']]);}
+function realtimeHelp(){showDialog('<p class="eyebrow">REAL-TIME FIELD NOTES</p><h2>Move. Conceal. Commit.</h2><p>Joystick, WASD or arrows move. Standing runs by default; crouching and crawling are slower. Sneak halves the speed of your posture. Stance switches remain free and bounce through kneeling.</p><p>The top right button toggles Hold Fire / Fire at Will (Space). Hold it to choose your fire mode and nearest, weakest or biggest-threat priority. Tap the aim button above the joystick (Q) to cycle hip fire, aimed and full aim. Higher aim takes longer, including before the first shot. A valid current target stays selected unless a substantially better target appears.</p><p>Tap an opponent for the original CRT body-location and manual firing controls, and to pin that target. Choose Single, 3-round Burst or Full Auto on the loadout screen. Open Weapons beside Aim to change modes, swap guns or reload in the field. Tap Fire for one shot or one burst. In Full Auto, hold Fire to keep firing and release to stop. Fire at Will uses the same mode. Empty guns automatically reload from your finite reserve; R or Weapons reloads early. You can move while reloading. Options and other dialogs pause the whole encounter; switching away also pauses without catching up later.</p><p>Grenades (G), flamethrowers (F), point shots, doors, loot and treatment retain their production controls. Area aiming suspends your automatic gunfire while enemies continue acting. Release the joystick before confirming a throw or flame burst. Flamethrowers also work with Fire at Will: one cone every 3 seconds, with no aiming. They use their normal cone, fuel and reload rules. Explosive weapons remain deliberate.</p><p>An opening hit while sneaking against an unaware opponent deals ×1.5 damage. Noise gives guards a place to investigate; friendly gunfire shares the shooter’s last known opponent position. Guards search after reaching that area, rather than forgetting mid-route. Kills earn the weapon skill XP; stealth kills also earn Sneak XP. First improvement: 3 kills in that skill, then progressively more.</p>',[['Back to menu',realtimeMenu],['Return to operation',()=>{},'primary']]);}
 function realtimeHardware(parent,{control,paint,icon,mark='',pressed,bar=false,disabled=false,onClick}){
   const b=document.createElement('button');b.type='button';b.className='industrial-switch shooting-switch'+(bar?' fire-bar':'');b.dataset.control=control;b.dataset.face=bar?'red':'amber';b.disabled=disabled;
   b.setAttribute('aria-label',paint+(mark?' · '+mark:''));if(pressed!==undefined)b.setAttribute('aria-pressed',String(pressed));

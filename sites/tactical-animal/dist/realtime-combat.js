@@ -14,7 +14,8 @@ export const WEAPON_TIMING=Object.freeze({
 export const TARGET_PRIORITIES=['nearest','weakest','threat'];
 export const automaticWeapon=weapon=>!!WEAPONS[weapon]?.mag&&!WEAPONS[weapon].blast&&!WEAPONS[weapon].thrown;
 const SINGLE_MODE=Object.freeze(['single']);
-const FIRE_MODES=Object.freeze(['single','burst','auto']);
+export const FIRE_MODES=Object.freeze(['single','burst','auto']);
+export const DEFAULT_FIRE_MODE='auto';
 export const fireModesFor=weapon=>WEAPON_TIMING[weapon]?.auto?FIRE_MODES:SINGLE_MODE;
 function modeFor(weapon,mode){
   const requested=mode===true?'burst':mode;
@@ -61,7 +62,9 @@ export function createRealtimeRules({hero,alive,distance,canSee,confirmedImpact,
   function enable(s){
     if(!s.realtime){
       const skills=['firearms','heavyWeapons','explosives','dexterity','sneak'];
-      s.realtime={version:1,runId:globalThis.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+Math.random().toString(36).slice(2),autoFire:false,priority:'nearest',aim:'hip',zone:'torso',fireMode:'single',targetId:null,pinnedId:null,time:0,fireClock:0,kills:0,xp:Object.fromEntries(skills.map(k=>[k,0])),gains:Object.fromEntries(skills.map(k=>[k,0])),earned:Object.fromEntries(skills.map(k=>[k,0])),actors:{}};
+      const preference=s.solo?.build?.fireMode;
+      const fireMode=FIRE_MODES.includes(preference)?preference:DEFAULT_FIRE_MODE;
+      s.realtime={version:1,runId:globalThis.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+Math.random().toString(36).slice(2),autoFire:false,priority:'nearest',aim:'hip',zone:'torso',fireMode,targetId:null,pinnedId:null,time:0,fireClock:0,kills:0,xp:Object.fromEntries(skills.map(k=>[k,0])),gains:Object.fromEntries(skills.map(k=>[k,0])),earned:Object.fromEntries(skills.map(k=>[k,0])),actors:{}};
     }
     for(const u of s.units){actor(s,u);u.realtimeMovement=true;if(!u.burningTurns)u.running=!u.sneaking;}
     if(['player','enemy'].includes(s.phase))s.phase='explore';

@@ -69,23 +69,35 @@ try{
   const name=phone?'phone':'desktop',context=await browser.newContext({viewport:phone?{width:390,height:844}:{width:800,height:600},isMobile:phone,hasTouch:phone,deviceScaleFactor:1});
   await context.addInitScript(installNativeProbe);const page=await context.newPage(),log=capture(page,name);activePage=page;
   await page.goto(`http://127.0.0.1:${port}/game.html`);assert.equal(await page.locator('#operation-select').inputValue(),'quiet-shift');assert.equal(await page.locator('#operation-select option').count(),5);
+  const loadoutMode=page.locator('#loadout-fire-mode');assert.equal(await loadoutMode.inputValue(),'auto');
+  if(phone)await loadoutMode.selectOption('single');
   await page.locator('#animals button').filter({hasText:'Yakov'}).click();await page.locator('#utility button').filter({hasText:'Frag grenades'}).click();await page.locator('#deploy').click();
-  let s=await wait(page,s=>s.ready,'initial renderer');assert.equal(s.autoFire,false);assert.equal(s.phase,'explore');assert.equal(s.shaderFailures,0);await screenshot(page,name+'-start');
+  let s=await wait(page,s=>s.ready,'initial renderer');
+  assert.equal(s.fireMode,phone?'single':'auto');assert.equal(s.autoFire,false);assert.equal(s.phase,'explore');assert.equal(s.shaderFailures,0);await screenshot(page,name+'-start');
   const gl=await page.evaluate(inspectWebGL,'#viewport canvas');assert(gl.available&&!gl.contextLost);mark(name+' full production bootstrap',{gl,operations:5,guards:s.guards.filter(g=>g.hp>0).length});
   await tap(page,'#realtime-aim',phone);assert.equal((await snapshot(page)).aim,'aimed');await tap(page,'#realtime-aim',phone);assert.equal((await snapshot(page)).aim,'full');await tap(page,'#realtime-aim',phone);
   await tap(page,'#end-turn',phone);assert((await snapshot(page)).autoFire);await tap(page,'#end-turn',phone);assert(!(await snapshot(page)).autoFire);mark(name+' persistent aim and fire-at-will controls');
   await tap(page,'#menu',phone);const paused=await snapshot(page);await page.waitForTimeout(250);assert.equal((await snapshot(page)).elapsed,paused.elapsed);await page.getByRole('button',{name:'Continue operation',exact:true}).click();mark(name+' inventory/options pause the actual simulation');
   await tap(page,'#menu',phone);await page.getByRole('button',{name:'Fire control: mode, aim & target priority',exact:true}).click();await page.getByRole('button',{name:'Target: Weakest',exact:true}).click();
-  await page.getByRole('button',{name:'3-round burst',exact:true}).click();
   await page.getByRole('button',{name:'Return to operation',exact:true}).click();
-  s=await snapshot(page);assert.equal(s.priority,'weakest');assert.equal(s.fireMode,'burst');
-  mark(name+' persistent fire mode and targeting priority through actual menu');
+  assert.equal((await snapshot(page)).priority,'weakest');
+  const weapons=await page.locator('#weapons').boundingBox(),aim=await page.locator('#realtime-aim').boundingBox(),stickBox=await page.locator('#joystick').boundingBox();
+  assert(weapons&&aim&&stickBox&&weapons.x>=aim.x+aim.width&&weapons.y+weapons.height<=stickBox.y);
+  if(phone)assert(weapons.height>=44);
+  await tap(page,'#weapons',phone);
+  assert(await page.getByRole('heading',{name:'Weapons.',exact:true}).isVisible());
+  const modePaused=(await snapshot(page)).elapsed;
+  await page.getByRole('button',{name:'3-round burst',exact:true}).click();
+  s=await snapshot(page);assert.equal(s.elapsed,modePaused);assert.equal(s.fireMode,'burst');assert(s.paused);
+  if(phone)await screenshot(page,'phone-weapons');
+  await page.getByRole('button',{name:'Return to operation',exact:true}).click();
+  mark(name+' loadout fire mode and independent Weapons button');
   if(!phone){
     // Automatic defence must already be armed when the deliberate point shot
     // alerts the guards, including while a slow renderer handles later controls.
     await page.locator('#end-turn').click();assert((await snapshot(page)).autoFire);
     // Real point-fire controls create a reload opportunity without injecting state.
-    await page.locator('#menu').click();await page.getByRole('button',{name:'Aim firearm at a point',exact:true}).click();await pointClick(page,{x:5,y:20,h:1.1});
+    await page.locator('#weapons').click();await page.getByRole('button',{name:'Aim firearm at a point',exact:true}).click();await pointClick(page,{x:5,y:20,h:1.1});
     assert.equal(await page.locator('[data-control="burst"]').getAttribute('aria-pressed'),'true');
     assert(await page.locator('[data-control="single"]').isVisible());
     await page.locator('[data-control="auto"]').click();
@@ -97,7 +109,7 @@ try{
     assert(s.lastDischarge.tracerVertices>0&&s.lastDischarge.fromMuzzle&&s.lastDischarge.flash&&s.lastDischarge.pose,JSON.stringify(s.lastDischarge));
     await waitForShotAudio(page,'ak47-shot');
     mark('the held full-auto trigger spends several rounds with native sound and tracer feedback',s.lastDischarge);
-    await page.locator('#menu').click();const reserveBefore=(await snapshot(page)).reserve;await page.getByRole('button',{name:/^Reload AK-47/}).click();s=await wait(page,s=>s.reloading,'timed reload');assert(s.ammo<30);const before=s.player;
+    await page.locator('#weapons').click();const reserveBefore=(await snapshot(page)).reserve;await page.getByRole('button',{name:/^Reload AK-47/}).click();s=await wait(page,s=>s.reloading,'timed reload');assert(s.ammo<30);const before=s.player;
     await page.keyboard.down('a');try{s=await wait(page,s=>Math.hypot(s.player.x-before.x,s.player.y-before.y)>.1,'held movement during reload',8000);}finally{await page.keyboard.up('a');}await screenshot(page,'desktop-reload-moving');await wait(page,s=>!s.reloading&&s.reserve<reserveBefore,'completed reload');mark('desktop real shot, timed reload, reserve consumption and movement');
     // The point shot already alerted the guards. Hold the covered arrival area
     // and let them approach; pause immediately after the automatic engagement.
@@ -117,7 +129,7 @@ try{
  {
   const context=await browser.newContext({viewport:{width:800,height:600}}),page=await context.newPage(),log=capture(page,'flamethrower');activePage=page;
   await context.addInitScript(installNativeProbe);await page.goto(`http://127.0.0.1:${port}/game.html`);
-  await page.locator('#animals button').filter({hasText:'Yakov'}).click();await page.getByRole('button',{name:'Backpack flamethrower',exact:true}).click();await page.locator('#deploy').click();
+  await page.locator('#animals button').filter({hasText:'Yakov'}).click();await page.getByRole('button',{name:'Backpack flamethrower',exact:true}).click();assert(await page.locator('#loadout-fire-mode').isHidden());await page.locator('#deploy').click();
   let s=await wait(page,s=>s.ready,'flamethrower renderer');assert(s.automatic);assert.equal(await page.locator('#realtime-aim').isDisabled(),true);assert.equal(await page.locator('#realtime-aim-label').textContent(),'AREA FIRE');assert.equal(await page.locator('#end-turn').isDisabled(),false);await page.locator('#end-turn').click();assert((await snapshot(page)).autoFire);
   await moveTo(page,{x:19,y:23});await moveTo(page,{x:19,y:13.5});s=await wait(page,s=>s.player.ammo.flamethrower<4&&s.kills>0,'automatic flame burst',25000);
   assert(s.autoFire);assert.equal(await page.locator('#flame-aim').isHidden(),true);assert.equal(s.shaderFailures,0);await waitForShotAudio(page,'flame-ignite');await screenshot(page,'flamethrower-fire-at-will');mark('flamethrower Fire at Will uses the production cone and fuel',{fuel:s.player.ammo.flamethrower,kills:s.kills});

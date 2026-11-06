@@ -14,7 +14,7 @@ function fixture({primary='assault',guards=[{x:28,y:25}],crate=false,door=false}
  const source=windowReviewSource();source.edges=door?{'e:20:25':'door-wood-closed'}:{};source.farmyardWindows.instances=[];
  source.guards=guards.map((g,i)=>({name:'Target '+i,species:'pig-foreman',weapon:'pistol',heading:0,...g}));
  if(crate)source.terrain[25][27]='crate';
- const s=Core.enableRealtime(createSoloGame({...DEFAULT_BUILD,primary,utility:'grenade'},1,WINDOW_REVIEW_ID,{authoredMap:source}));
+ const s=Core.enableRealtime(createSoloGame({...DEFAULT_BUILD,primary,utility:'grenade',fireMode:'single'},1,WINDOW_REVIEW_ID,{authoredMap:source}));
  for(const u of s.units){u.hp=u.maxHp=10000;}hero(s).stats.firearms=hero(s).stats.dexterity=100;if(crate){s.units[1].stance='kneeling';Core.refresh(s);}
  return s;
 }
@@ -42,7 +42,7 @@ test('the visible aim follows an accepted order before discharge without spendin
 test('full inherited operations coexist with an initially unengaged real-time encounter',()=>{
  assert.equal(MISSIONS.length,3);
  const s=Core.enableRealtime(createSoloGame(DEFAULT_BUILD,1,FIRST_REALTIME_MISSION.id));
- assert.equal(s.phase,'explore');assert.equal(s.realtime.autoFire,false);assert.equal(s.units.filter(v=>v.team==='guard'&&v.hp>0).length,2);
+ assert.equal(s.phase,'explore');assert.equal(s.realtime.autoFire,false);assert.equal(Core.realtimeStatus(s).fireMode,'auto');assert.equal(s.units.filter(v=>v.team==='guard'&&v.hp>0).length,2);
  assert(s.interactables.some(o=>o.kind==='door'));assert(s.interactables.some(o=>o.kind==='chest'));assert(s.units.filter(v=>v.team==='guard'&&v.hp>0).every(v=>!v.alert));
 });
 test('the introductory encounter can be completed legally with automatic combat, collection and extraction',()=>{
@@ -250,6 +250,27 @@ test('real application controls toggle fire, persist aim, pause with menus/backg
  a.el('end-turn').click();assert(s.realtime.autoFire);a.el('realtime-aim').click();assert.equal(s.realtime.aim,'aimed');a.key(' ');assert.equal(s.realtime.autoFire,false);
  a.el('menu').click();const elapsed=s.elapsed;a.advance(20);assert.equal(s.elapsed,elapsed);action(a,'Continue operation').click();a.visibility(true);a.advance(20);assert.equal(s.elapsed,elapsed);a.visibility(false);a.advance(2);assert(s.elapsed>elapsed);
  assert.equal(a.saved.get('tactical-animal-operation-v2'),old);assert(a.saved.has('farmyard-realtime:tactical-animal-operation-v2'));
+});
+test('loadout default and the dedicated Weapons menu keep preparation and operation modes separate',()=>{
+ const a=app({realTime:true,autoDeploy:false}),picker=a.el('loadout-fire-mode');
+ assert.equal(picker.value,'auto');assert.equal(a.el('loadout-fire-mode-picker').hidden,false);
+ picker.value='burst';picker.fire('change');
+ const prefs=JSON.parse(a.saved.get('farmyard-realtime:tactical-animal-first-shift-v1'));
+ assert.equal(prefs.builds[FIRST_REALTIME_MISSION.id].fireMode,'burst');
+ a.el('deploy').click();
+ assert.equal(Core.realtimeStatus(a.s).fireMode,'burst');assert.equal(a.s.realtime.autoFire,false);
+ a.el('weapons').click();assert.match(a.el('overlay-content').innerHTML,/<h2>Weapons\.<\/h2>/);
+ const elapsed=a.s.elapsed;a.advance(10);assert.equal(a.s.elapsed,elapsed);
+ assert.equal(action(a,'3-round burst').textContent,'3-round burst · selected');
+ action(a,'Single shot').click();
+ assert.equal(Core.realtimeStatus(a.s).fireMode,'single');
+ action(a,'Return to operation').click();
+ a.el('menu').click();action(a,'Choose operation, animal & loadout').click();
+ assert.equal(picker.value,'burst');
+ picker.value='auto';picker.fire('change');
+ a.el('resume').click();assert.equal(Core.realtimeStatus(a.s).fireMode,'single');
+ a.el('menu').click();action(a,'Choose operation, animal & loadout').click();
+ assert.equal(picker.value,'auto');
 });
 test('a corrupt career cannot prevent the actual operation from saving',()=>{
  const a=app({realTime:true,initialState:fixture(),initialStorage:[['farmyard-realtime:careers-v1','invalid']]});
