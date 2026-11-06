@@ -32,7 +32,7 @@ async function close(){
 }
 const snapshot=page=>page.evaluate(async()=>{const url=document.querySelector('script[src*="app.js"]').src;return (await import(url)).inspectRealtime();});
 const project=(page,point)=>page.evaluate(async point=>{const url=document.querySelector('script[src*="app.js"]').src;return (await import(url)).projectRealtimePoint(point);},point);
-async function wait(page,predicate,label,timeout=20000){const end=Date.now()+timeout;let last;while(Date.now()<end){last=await snapshot(page);if(predicate(last))return last;if(last.status==='lost')throw Error('Encounter lost while '+label+': '+JSON.stringify(last));await page.waitForTimeout(100);}throw Error(label+': '+JSON.stringify(last));}
+async function wait(page,predicate,label,timeout=20000,read=snapshot){const end=Date.now()+timeout;let last;while(Date.now()<end){last=await read(page);if(predicate(last))return last;if(last.status==='lost')throw Error('Encounter lost while '+label+': '+JSON.stringify(last));await page.waitForTimeout(100);}throw Error(label+': '+JSON.stringify(last));}
 const audioBytes=id=>fs.statSync(path.join(site,'assets/audio/weapon-sfx',id+'.wav')).size;
 async function waitForShotAudio(page,id){
   await page.waitForFunction(bytes=>window.__windowNativeProbe.snapshot().audio.some(context=>
@@ -140,10 +140,12 @@ try{
  await page.goto(`http://127.0.0.1:${port}/window-yard.html`);
  await page.waitForFunction(()=>document.querySelector('#loading').hidden);assert.match(await page.locator('#status').textContent(),/Real time/);
  await page.locator('#fire-mode').selectOption('auto');
- const yardAmmo=page=>page.evaluate(async()=>{
+ const yardRounds=page=>page.evaluate(async()=>{
    const entry=await import(document.querySelector('script[src*="window-yard.js"]').src);
-   return entry.inspectWindowYard().units[0].ammo.assault;
+   const {units:[player],elapsed,phase}=entry.inspectWindowYard();
+   return {total:player.ammo.assault+player.ammoPouch.assault,elapsed,status:phase};
  });
+ const before=await yardRounds(page);
  const pane=await page.evaluate(async()=>{
    const entry=await import(document.querySelector('script[src*="window-yard.js"]').src);
    return entry.projectWindowYard({x:20,y:21.5,h:1.05});
@@ -152,15 +154,16 @@ try{
  const trigger=page.locator('#fire'),touch=await trigger.boundingBox(),cdp=await context.newCDPSession(page);
  assert(await trigger.isEnabled(),await page.locator('#message').textContent());
  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:touch.x+touch.width/2,y:touch.y+touch.height/2}]});
- try{await page.waitForFunction(async()=>{
-   const entry=await import(document.querySelector('script[src*="window-yard.js"]').src);
-   return entry.inspectWindowYard().units[0].ammo.assault<=27;
- },null,{timeout:15000});}
+ // Await the async snapshot before testing the predicate. Use total rounds
+ // and simulation time so a reload or a slow browser frame cannot skew it.
+ try{await wait(page,s=>s.total<=before.total-3,'three held editor shots',15000,yardRounds);}
  finally{await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});}
  await page.waitForFunction(()=>document.querySelector('#fire').disabled);
- const left=await yardAmmo(page);await page.waitForTimeout(550);assert.equal(await yardAmmo(page),left);
+ const released=await yardRounds(page);
+ const later=await wait(page,s=>s.elapsed>=released.elapsed+.55,'time after editor touch release',15000,yardRounds);
+ assert.equal(later.total,released.total,JSON.stringify({before,released,later}));
  await screenshot(page,'real-time-proving-yard');assert.equal(log.errors.length,0,JSON.stringify(log.errors));assert.equal(log.requests.length,0,JSON.stringify(log.requests));
- mark('editor proving yard uses production full auto and stops on touch release',{ammo:left});await cdp.detach();await context.close();report.success=true;
+ mark('editor proving yard uses production full auto and stops on touch release',{spent:before.total-released.total});await cdp.detach();await context.close();report.success=true;
 }catch(error){report.failure=error.stack||String(error);if(activePage&&!activePage.isClosed()){try{report.failureSnapshot=await snapshot(activePage);await screenshot(activePage,'failure');}catch{}}process.exitCode=1;console.error(error.stack||error);}
 finally{await close();}
 if(report.success)console.log('Real-time native acceptance passed; disposable helpers stopped.');
