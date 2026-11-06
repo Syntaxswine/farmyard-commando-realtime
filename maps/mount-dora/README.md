@@ -20,6 +20,10 @@ embedded in the game is not evidence that Nautilus wall-run extensions render.
 
 - Roads and paths, the complete Lake Dora shoreline polygon, park and wetland
   areas, and 950 source building footprints, including courtyard holes.
+- Public streets use a 6 m carriageway with 2 m sidewalks on both sides.
+  Near-cardinal runs snap to metre lines, with shared junctions kept connected.
+  The game camera looks north-up. Source road centerlines are retained in
+  `features.json`, and paths, service lanes and boardwalks keep their own widths.
 - Grid-aligned exterior walls, floors and upper masks. Eighty-four buildings
   cross sector boundaries; their source identities and wall geometry continue
   across the cuts without invented closing walls.
@@ -28,8 +32,8 @@ embedded in the game is not evidence that Nautilus wall-run extensions render.
 - A common metre coordinate system, all 42 native JSON documents, neighbor
   references, source feature identities, raw input snapshots and reproducible
   generation records.
-- Declared mapped-tree proxies and seeded vegetation. These are scenery
-  approximations, not a survey of individual trees or species.
+- AFT broadleaf trees, shrubs and reeds dress mapped parks, woods, wetlands and
+  open ground in residential areas. Individual placements are seeded scenery.
 - Mapped sports pitches exclude procedural trees. Tennis and pickleball polygons
   use a declared existing asphalt ground proxy without invented court markings;
   overlapping source records are retained rather than asserted as a current count.
@@ -39,8 +43,9 @@ A07 contain only lake water. Their geographic files are complete, but the
 workshop refuses them because it requires four walkable squad starts and a
 travel marker. The authoring data does not add fake platforms to bypass that
 rule. The other sectors have five clearly identified authoring-validator
-markers on connected existing land; these are not designed mission starts or
-extraction points. No guards or objectives have been added.
+markers on connected existing land for editor validation. Each of those 39
+sectors also has a separate sentry post that uses the game's normal combat and
+save systems.
 
 ## Scale, coverage and precision
 

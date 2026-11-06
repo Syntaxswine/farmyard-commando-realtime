@@ -27,7 +27,7 @@ async function run(points){
   world.startPoint=asGame(points[0]);
   try{
     await world.readyAt(world.startPoint);assert(world.pointClear(world.startPoint),'Starting approach must be clear.');
-    const state=createSoloGame(DEFAULT_BUILD,1947,'mount-dora',{tourWorld:world}),unit=hero(state);
+    const state=Core.enableRealtime(createSoloGame(DEFAULT_BUILD,1947,'mount-dora',{tourWorld:world})),unit=hero(state);
     const pack=JSON.stringify(unit.pack);let segments=0;
     for(const end of points.slice(1)){
       const from={x:unit.x,y:unit.y},to=asGame(end),distance=Math.hypot(to.x-from.x,to.y-from.y),steps=Math.max(1,Math.ceil(distance/3));

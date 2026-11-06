@@ -228,14 +228,43 @@ class MountDoraGeneration(unittest.TestCase):
                 if prop["mountDora"]["placement"] == "declared-seeded-greenery":
                     self.assertNotIn((ox+prop["x"],oy+prop["y"]),pitch_cells)
 
-    def test_preview_anchors_are_connected_existing_safe_cells_and_no_enemies(self):
+    def test_streets_share_widths_and_keep_source_junctions(self):
+        originals = {f["id"]: f for f in BUILDER.load_source()[3]}
+        junctions = {}
+        cardinal = segments = 0
+        for feature in self.features.values():
+            style = feature.get("nativeRoad")
+            if not style or feature["geometry"]["type"] != "LineString":
+                continue
+            source = feature["geometry"]["coordinates"]
+            self.assertEqual(source, originals[feature["id"]]["geometry"]["coordinates"])
+            line = style.get("centerline", source)
+            for before, after in zip(source, line, strict=True):
+                self.assertEqual(after, junctions.setdefault(tuple(before), after))
+                self.assertLessEqual(max(abs(a - b) for a, b in zip(before, after)), BUILDER.STREET_SNAP_LIMIT)
+                if style["bridge"] or style["woodSurface"]:
+                    self.assertEqual(before, after)
+            if feature["tags"]["highway"] in BUILDER.STREET_CLASSES:
+                self.assertEqual((style["widthM"], style["sidewalk"], style["sidewalkWidthM"]), (6, "both", 2))
+                for a, b in zip(line, line[1:]):
+                    self.assertNotEqual(a, b)
+                    segments += 1
+                    cardinal += a[0] == b[0] or a[1] == b[1]
+        self.assertGreater(cardinal, .7 * segments)
+
+    def test_preview_anchors_and_sentries_are_on_existing_outdoor_cells(self):
         for sector in self.project["sectors"]:
             mapping = self.maps[sector["id"]]
-            self.assertEqual(mapping["guards"],[])
+            post = sector["guard"]
+            self.assertEqual(mapping["guards"], [post] if post else [])
             self.assertEqual(mapping["stairs"],[])
             self.assertEqual(mapping["climbs"],[])
             if not sector["nativeImport"]["ready"]:
+                self.assertIsNone(post)
                 continue
+            self.assertEqual(post["z"], 0)
+            self.assertNotIn(mapping["terrain"][post["y"]][post["x"]], ("water", "floor", "bridge"))
+            self.assertNotIn((post["x"], post["y"]), {(p["x"], p["y"]) for p in mapping["props"]})
             points = mapping["starts"] + mapping["exits"]
             self.assertEqual(len(mapping["starts"]),4)
             self.assertEqual(len(mapping["exits"]),1)

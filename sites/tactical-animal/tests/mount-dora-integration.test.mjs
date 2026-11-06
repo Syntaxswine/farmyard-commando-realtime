@@ -21,7 +21,7 @@ test('committed production art leaves every source-reviewed visit approach clear
 test('actual Core travel follows both mapped boardwalk centre lines, joins and returns with production rails intact',async()=>{
   const f=JSON.parse(fs.readFileSync(new URL('features.json',base))).features,first=f.find(x=>x.id==='osm-way-548471563').geometry.coordinates,second=f.find(x=>x.id==='osm-way-688219167').geometry.coordinates;
   const points=[...first,...second.slice(1)].map(p=>({x:p[0]-.5,y:p[1]-.5})),w=await new TownWorld(project,{baseURL:base,fetcher,art:ART}).identify();w.startPoint=points[0];
-  try{await w.readyAt(points[0]);await idle(w);const s=createSoloGame(DEFAULT_BUILD,1947,'mount-dora',{tourWorld:w}),u=hero(s);let length=0;
+  try{await w.readyAt(points[0]);await idle(w);const s=Core.enableRealtime(createSoloGame(DEFAULT_BUILD,1947,'mount-dora',{tourWorld:w})),u=hero(s);let length=0;
     for(const p of [...points.slice(1),...points.slice(0,-1).reverse()]){const d=Math.hypot(p.x-u.x,p.y-u.y),walked=Core.travel(s,u,p.x-u.x,p.y-u.y);assert(Math.abs(walked-d)<1e-5,'Mapped deck/rail clearance at '+JSON.stringify(p));assert(Math.hypot(u.x-p.x,u.y-p.y)<1e-5);length+=d;}
     assert(length>1000);assert(Math.abs(s.solo.distance-length)<1e-5);assert(Math.hypot(u.x-points[0].x,u.y-points[0].y)<1e-5);assert.equal(s.phase,'explore');assert(w.stats.peakDecoded<=9);
   }finally{w.dispose();}

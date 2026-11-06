@@ -15,6 +15,7 @@ const surfaceFiles={
   brick:'hybrid-surfaces/brick-factory-v1.png',concrete:'ground-concrete.png',wood:'hybrid-surfaces/wood-factory-v2.png'
 };
 const miniColors=['#17241e','#77845c','#486c7a','#62744c','#866d4c','#929078','#535858','#9d9c8b','#8f7958','#a18b67','#a7a68e'];
+const plantModels={'tree-broadleaf':'temperate-broadleaf','tree-pine':'temperate-pine',bush:'temperate-shrub',reeds:'wetland-reeds'};
 // Original AFT textures/plant factory and exact Nautilus wall panels, adapted only for bounded residency.
 export class TownEnvironment{
   constructor(renderer,state,{onLoading=()=>{},onError=()=>{},loader,artModule,createArt,loadAtlas}={}){
@@ -64,7 +65,17 @@ export class TownEnvironment{
       const matrix=new T.Matrix4(),p=new T.Vector3(),q=new T.Quaternion(),e=new T.Euler(),scale=new T.Vector3();let panelCount=0;
       for(const [kind,panels]of groups){const mesh=new T.InstancedMesh(this.cube,this.material(kind),panels.length);for(const [i,v]of panels.entries()){q.setFromEuler(e.set(0,v.yaw,0));matrix.compose(p.fromArray(v.center),q,scale.fromArray(v.size));mesh.setMatrixAt(i,matrix);}mesh.castShadow=mesh.receiveShadow=true;mesh.computeBoundingSphere();this.wallGroup.add(mesh);panelCount+=panels.length;}
       this.stats.wallPanels=panelCount;
-      if(this.plantFactory){const keep=new Set();for(const plant of this.world.plantsFor([window.x-.5,window.y-.5,window.x+window.w-.5,window.y+window.h-.5])){keep.add(plant.id);if(!this.plants.has(plant.id)){const model=this.plantFactory.create(plant.kind==='reeds'?'wetland-reeds':'temperate-broadleaf',{variant:0,mature:false});model.position.set(plant.x,0,plant.y);this.plants.set(plant.id,model);this.plantGroup.add(model);}}for(const [id,model]of this.plants)if(!keep.has(id)){model.removeFromParent();this.plants.delete(id);}}
+      if(this.plantFactory){
+        const keep=new Set();
+        for(const plant of this.world.plantsFor([window.x-.5,window.y-.5,window.x+window.w-.5,window.y+window.h-.5])){
+          keep.add(plant.id);
+          if(this.plants.has(plant.id))continue;
+          const variant=(plant.x*13+plant.y*17)%3;
+          const model=this.plantFactory.create(plantModels[plant.kind],{variant});
+          model.position.set(plant.x,0,plant.y);this.plants.set(plant.id,model);this.plantGroup.add(model);
+        }
+        for(const [id,model]of this.plants)if(!keep.has(id)){model.removeFromParent();this.plants.delete(id);}
+      }
       this.landmarks?.updateResident([window.x,window.y,window.x+window.w,window.y+window.h]);
       this.window=window;this.dataRevision=this.world.revision;this.stats.groundCells=[...this.chunks.values()].reduce((n,c)=>n+c.cells,0);this.stats.plantModels=this.plants.size;
     }
@@ -82,5 +93,9 @@ export function drawTownMinimap(canvas,state,options={}){
   if(!world.overviewImage&&cached.revision!==world.overviewRevision){const c=cached.canvas.getContext('2d');for(let y=0;y<210;y++)for(let x=0;x<180;x++){c.fillStyle=miniColors[world.overview[y*180+x]];c.fillRect(x,y,1,1);}cached.revision=world.overviewRevision;}
   const scale=Math.min((w-12)/1440,(h-12)/1680),ox=(w-1440*scale)/2,oy=(h-1680*scale)/2;ctx.imageSmoothingEnabled=false;ctx.drawImage(cached.canvas,ox,oy,1440*scale,1680*scale);
   ctx.strokeStyle='#85907d';ctx.lineWidth=.5;for(let x=240;x<1440;x+=240){ctx.beginPath();ctx.moveTo(ox+x*scale,oy);ctx.lineTo(ox+x*scale,oy+1680*scale);ctx.stroke();}for(let y=240;y<1680;y+=240){ctx.beginPath();ctx.moveTo(ox,oy+y*scale);ctx.lineTo(ox+1440*scale,oy+y*scale);ctx.stroke();}
+  ctx.fillStyle='#e16a47';
+  for(const unit of state.units)if(unit.hp>0&&state.detected.has(unit.id)){
+    ctx.beginPath();ctx.arc(ox+(unit.x+.5)*scale,oy+(unit.y+.5)*scale,options.expanded?3:2,0,Math.PI*2);ctx.fill();
+  }
   const unit=state.units[0];drawPlayerMapMarker(canvas,ctx,{x:ox+(unit.x+.5)*scale,y:oy+(unit.y+.5)*scale,heading:unit.heading},options);
 }

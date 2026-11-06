@@ -35,16 +35,21 @@ test('Mount Dora uses the normal firearm, grenade, AP turn and resume lifecycle'
   a.view.options.onPick({x:u.x-5,y:u.y,ground:true,h:1.1});action(a,'Fire ·').click();assert.equal(u.ammo[u.weapon],ammo-1);assert.equal(s.phase,'player');assert(u.ap<u.maxAp);
   assert(Core.throwGrenade(s,u,{x:u.x-8,y:u.y}));assert.equal(u.ammo.grenade,grenades-1);assert(s.effect.sequence.some(e=>e.weapon==='grenade'));
   const progress=readTourProgress(encodeSave(s)),restored=await loadTownTour({progress,fetcher,projectURL});
-  try{assert.equal(restored.phase,'player');assert.equal(hero(restored).ap,u.ap);assert.equal(hero(restored).ammo.grenade,u.ammo.grenade);assert.equal(restored.round,s.round);assert(Core.endTurn(restored));tick(restored,.4);assert.equal(restored.phase,'explore');assert.equal(hero(restored).ap,hero(restored).maxAp);}finally{getTourWorld(restored).dispose();}
+  try{assert.equal(restored.phase,'player');assert.equal(hero(restored).ap,u.ap);assert.equal(hero(restored).ammo.grenade,u.ammo.grenade);assert.equal(restored.round,s.round);assert(Core.endTurn(restored));finishTurn(restored);assert.equal(restored.phase,'explore');assert.equal(hero(restored).ap,hero(restored).maxAp);}finally{getTourWorld(restored).dispose();}
  }finally{w.dispose();}
 });
+
+function finishTurn(state){
+ for(let i=0;i<200&&state.phase==='enemy';i++)tick(state,.05);
+ assert.notEqual(state.phase,'enemy');
+}
 
 test('Mount Dora uses real flame effects and the production burn-to-death lifecycle',async()=>{
  const s=await town({primary:'flamethrower'}),w=getTourWorld(s),u=hero(s);
  try{
-  const fuel=u.ammo.flamethrower;assert(Core.fireFlame(s,u,180));assert.equal(u.ammo.flamethrower,fuel-1);assert(s.effect.sequence[0].flame);assert(Core.endTurn(s));tick(s,.4);
+  const fuel=u.ammo.flamethrower;assert(Core.fireFlame(s,u,180));assert.equal(u.ammo.flamethrower,fuel-1);assert(s.effect.sequence[0].flame);assert(Core.endTurn(s));finishTurn(s);
   assert(Core.ignite(s,u));Core.refresh(s);const progress=readTourProgress(encodeSave(s)),restored=await loadTownTour({progress,fetcher,projectURL});
-  try{const r=hero(restored);assert.equal(r.burningTurns,3);assert.equal(r.ap,0);assert.equal(restored.fireAnimations,undefined);for(let i=0;i<3;i++){assert(Core.endTurn(restored));tick(restored,.4);}assert.equal(r.hp,0);assert.equal(restored.solo.status,'lost');assert.equal(readTourProgress(encodeSave(restored)).status,'lost');}finally{getTourWorld(restored).dispose();}
+  try{const r=hero(restored);assert.equal(r.burningTurns,3);assert.equal(r.ap,0);assert.equal(restored.fireAnimations,undefined);for(let i=0;i<3;i++){assert(Core.endTurn(restored));finishTurn(restored);}assert.equal(r.hp,0);assert.equal(restored.solo.status,'lost');assert.equal(readTourProgress(encodeSave(restored)).status,'lost');}finally{getTourWorld(restored).dispose();}
  }finally{w.dispose();}
 });
 

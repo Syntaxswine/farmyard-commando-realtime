@@ -67,9 +67,9 @@ export function createSoloGame(build=DEFAULT_BUILD,seed=1947,missionId=DEFAULT_M
   u.slots=[build.primary,build.secondary];const kinds=[...u.slots,...(build.utility==='grenade'?['grenade']:[])];
   u.ammo=Object.fromEntries(kinds.map(k=>[k,WEAPONS[k].mag]));u.pack=kinds.map(kind=>({type:'weapon',kind,rounds:u.ammo[kind],condition:100}));if(build.secondary==='pistol')u.ammoPouch.pistol=24;
   const stats={strength:10,endurance:20,agility:22,firearms:35,perception:35,dexterity:35};
-  const posts=authoredMap?authoredMap.guards||[]:mission.guards;
+  const posts=walkingWorld?.guardPosts??(authoredMap?authoredMap.guards||[]:mission.guards);
   if(authoredMap&&(posts.length>128||posts.some(g=>!g||!WEAPONS[g.weapon]||!['horse','goat','bull','cow','donkey','sheep','skunk','pig-foreman','pig-director','rabbit','dog','hen'].includes(g.species)||!insideWorld({map:m.terrain,worldBounds:m.worldBounds},g))))throw Error('Unsupported authored guard.');
-  const units=[u,...posts.map((g,i)=>makeUnit(i+1,'guard',g.name||g.character?.displayName||'Guard '+(i+1),g.species,g.weapon,g.x,g.y,g.heading??0,stats))];
+  const units=[u,...posts.map((g,i)=>makeUnit(walkingWorld?g.id:i+1,'guard',g.name||g.character?.displayName||'Guard '+(i+1),g.species,g.weapon,g.x,g.y,g.heading??0,stats))];
   if(mission.fallen){const f=mission.fallen,fallen=makeUnit(units.length,'guard',f.name,f.species,f.weapon,f.x,f.y,f.heading,stats);fallen.hp=0;fallen.casualty='dead';units.push(fallen);}
   const s={map:m.terrain,edges:m.edges,units,interactables:missionInteractables({missionId:mission.id,layoutVersion:mission.layoutVersion??1}),phase:'explore',round:0,selected:0,visible:new Set(),seen:new Set(),detected:new Set(),log:[],seed,revision:0,queue:[],enemyIndex:1,enemyDelay:0,elapsed:0,solo:{version:2,missionId:mission.id,layoutVersion:mission.layoutVersion??1,build:{...build},objectives:{},inspected:[],ledger:false,status:'active',dressings:build.utility==='dressing'?2:0,distance:0,apDistance:0}};
   if(authoredMap){s.solo.authoredMap=structuredClone(authoredMap);s.interactables=(m.doors||[]).map(({interactive,...door})=>({...door}));}
@@ -715,7 +715,11 @@ function realtimePlayerStep(s,dt,input){
   if(input&&Math.hypot(input.x,input.y)>.1){s.queue=[];const n=Math.max(1,Math.hypot(input.x,input.y));travel(s,u,input.x/n*movementSpeed(u)*dt,input.y/n*movementSpeed(u)*dt);}
   else if(s.queue.length){const p=s.queue[0],d=distance(u,p);if(d<.025)s.queue.shift();else{const step=Math.min(d,movementSpeed(u)*dt);if(!travel(s,u,(p.x-u.x)/d*step,(p.y-u.y)/d*step))s.queue=[];}}
 }
-const realtimeRules=createRealtimeRules({hero,alive,distance,canSee,confirmedImpact,previewAttack,headingTo,flameAffects,previewFlame,fireFlame:(s,u,heading)=>fireFlame(s,u,heading,{keepMovement:true}),attack:(s,a,...args)=>damageAction(s,a,a.weapon,()=>attackNow(s,a,...args)),completeReload:(s,u)=>reloadNow(s,u,true),travel,movePlayer:realtimePlayerStep,approachPath,refresh,log,fireRules});
+function guardActive(s,g){
+  const town=getTourWorld(s);
+  return !town||(distance(g,hero(s))<=72&&town.residentAt(g)&&(!g.lastKnown||town.residentAt(g.lastKnown)));
+}
+const realtimeRules=createRealtimeRules({hero,alive,distance,canSee,confirmedImpact,previewAttack,headingTo,flameAffects,previewFlame,fireFlame:(s,u,heading)=>fireFlame(s,u,heading,{keepMovement:true}),attack:(s,a,...args)=>damageAction(s,a,a.weapon,()=>attackNow(s,a,...args)),completeReload:(s,u)=>reloadNow(s,u,true),travel,movePlayer:realtimePlayerStep,approachPath,guardActive,refresh,log,fireRules});
 export const enableRealtime=s=>realtimeRules.enable(s);
 export const configureRealtime=(s,changes)=>realtimeRules.configure(s,changes);
 export const pinRealtimeTarget=(s,id)=>realtimeRules.pin(s,id);

@@ -65,6 +65,41 @@ try{
  deadline=setTimeout(()=>{report.failure='Acceptance deadline expired';void close().finally(()=>process.exit(1));},600000);
  browserServer=await chromium.launchServer({host:'127.0.0.1',headless:true,...process.env.REALTIME_BROWSER_CHANNEL?{channel:process.env.REALTIME_BROWSER_CHANNEL}:{},args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
  wsPort=Number(new URL(browserServer.wsEndpoint()).port);report.helpers.push({...identity(browserServer.process().pid,'Chromium'),purpose:'Disposable headless native browser',port:wsPort,expiry:'Current acceptance only',stop:'browserServer.close()'});save();browser=await chromium.connect(browserServer.wsEndpoint());
+ {
+  const context=await browser.newContext({viewport:{width:800,height:600}}),page=await context.newPage(),log=capture(page,'mount-dora');activePage=page;
+  await context.addInitScript(installNativeProbe);await page.goto(`http://127.0.0.1:${port}/game.html?activity=mount-dora`);
+  assert.equal(await page.locator('#operation-select').inputValue(),'mount-dora');await page.locator('#deploy').click();
+  const start=await wait(page,s=>s.ready,'Mount Dora renderer',90000);
+  assert.equal(start.guards.length,39);assert.equal(start.contacts.length,0);
+  const layout=await page.evaluate(async()=>{
+    const app=await import(document.querySelector('script[src*="app.js"]').src),town=app.inspectMountDora(),p=town.player;
+    const center=app.projectRealtimePoint(p),east=app.projectRealtimePoint({...p,x:p.x+3}),north=app.projectRealtimePoint({...p,y:p.y-3});
+    return {plants:town.render.plantModels,center,east,north};
+  });
+  assert(layout.plants>0);assert(layout.east.x>layout.center.x&&Math.abs(layout.east.y-layout.center.y)<.001);
+  assert(layout.north.y<layout.center.y&&Math.abs(layout.north.x-layout.center.x)<.001);
+  mark('Mount Dora loads AFT plants, all land sentries and a north-up field camera',{plants:layout.plants,guards:start.guards.length});
+  // Resume an ordinary checkpoint at a clear B03 approach. Guard data,
+  // detection, combat and save/resume all use the deployed town and game.
+  const saveKey='farmyard-realtime:farmyard-mount-dora-tour-v1',sentry=start.guards.find(g=>g.id===14);
+  await page.locator('#menu').click();
+  await page.reload();
+  await page.evaluate(key=>{
+    const save=JSON.parse(localStorage.getItem(key));Object.assign(save.player,{x:356,y:605});
+    localStorage.setItem(key,JSON.stringify(save));
+  },saveKey);
+  await page.locator('#resume').click();
+  await wait(page,s=>s.ready&&s.guards.find(g=>g.id===sentry.id).ammo.pistol<sentry.ammo.pistol,'Mount Dora sentry returns fire',30000);
+  await page.locator('#end-turn').click();
+  const won=await wait(page,s=>s.kills===1&&s.objects.some(o=>o.id==='body:'+sentry.id),'Mount Dora Fire at Will defeats the sentry',25000);
+  assert(won.ammo<start.ammo);await screenshot(page,'mount-dora-sentry');
+  await page.locator('#menu').click();await page.reload();await page.locator('#resume').click();
+  const resumed=await wait(page,s=>s.ready,'Mount Dora combat checkpoint',90000);
+  assert.equal(resumed.kills,1);assert.equal(resumed.guards.find(g=>g.id===sentry.id).hp,0);
+  assert(resumed.objects.some(o=>o.id==='body:'+sentry.id));assert.equal(resumed.ammo,won.ammo);
+  mark('Mount Dora uses production return fire, Fire at Will, body registration and casualty persistence');
+  assert.equal(log.errors.length,0,JSON.stringify(log.errors));assert.equal(log.requests.length,0,JSON.stringify(log.requests));await context.close();
+ }
  for(const phone of [false,true]){
   const name=phone?'phone':'desktop',context=await browser.newContext({viewport:phone?{width:390,height:844}:{width:800,height:600},isMobile:phone,hasTouch:phone,deviceScaleFactor:1});
   await context.addInitScript(installNativeProbe);const page=await context.newPage(),log=capture(page,name);activePage=page;

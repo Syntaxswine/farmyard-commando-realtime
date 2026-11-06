@@ -24,22 +24,30 @@ export class TownExplored{
   *[Symbol.iterator](){for(const [id,bytes]of this.chunks){const bx=id%this.columns,by=Math.floor(id/this.columns);for(let bit=0;bit<576;bit++)if(bytes[bit>>3]&(1<<(bit&7)))yield bx*BLOCK+bit%24+','+(by*BLOCK+Math.floor(bit/24));}}
 }
 export const TOUR_SAVE='farmyard-mount-dora-tour-v1';
+const townPoint=p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>=-.27&&p.x<=1439.27&&p.y>=-.27&&p.y<=1679.27;
+const resourceCounts=data=>data&&typeof data==='object'&&!Array.isArray(data)&&Object.values(data).every(n=>Number.isFinite(n)&&n>=0&&n<=100000);
+function validUnit(u){
+  return townPoint(u)&&(!u.lastKnown||townPoint(u.lastKnown))&&
+    [[u.hp,u.maxHp],[u.stamina,u.maxStamina],[u.ap,u.maxAp]].every(([n,max])=>Number.isFinite(n)&&Number.isFinite(max)&&n>=0&&n<=max&&max<=10000)&&
+    resourceCounts(u.ammo)&&resourceCounts(u.ammoPouch)&&Array.isArray(u.pack)&&u.pack.length<=128&&Array.isArray(u.slots)&&u.slots.length<=16&&
+    ['standing','kneeling','prone'].includes(u.stance);
+}
 export function encodeTourProgress(state,world){
   const u=state.units.find(u=>u.team==='squad');
   return JSON.stringify({kind:'farmyard-mount-dora-tour',version:1,sourceRevision:world.sourceRevision,sourceDigest:world.project.generation.sourceDigest,artRevision:world.artRevision,
     build:{...state.solo.build},player:{...u,isMoving:false},dressings:state.solo.dressings,distance:state.solo.distance,elapsed:state.elapsed,explored:state.seen.snapshot(),log:state.log.slice(0,20),
     runtime:{realtime:state.realtime,phase:state.phase,round:state.round,seed:state.seed,engaged:!!state.engaged,status:state.solo.status,enemyIndex:state.enemyIndex,enemyDelay:state.enemyDelay,panicDelay:state.panicDelay,fires:state.fires||[],areaWeapon:state.solo.areaWeapon,
+      guards:state.units.filter(v=>v.team==='guard').map(v=>({...v,isMoving:false})),
       objects:state.interactables.map(({id,open,searched,inventory})=>({id,open,searched,inventory}))}});
 }
 export function readTourProgress(text){
   if(typeof text!=='string'||text.length>1_500_000)throw Error('Town save is too large.');
   const p=JSON.parse(text),u=p?.player;
-  if(p.kind!=='farmyard-mount-dora-tour'||p.version!==1||!/^[a-f0-9]{64}$/.test(p.sourceRevision)||!/^[a-f0-9]{64}$/.test(p.artRevision)||!u||u.id!==0||u.team!=='squad'||
-    ![u.x,u.y,u.hp,u.maxHp,u.stamina,u.maxStamina,u.ap,u.maxAp,p.dressings,p.distance,p.elapsed].every(Number.isFinite)||u.x<-.27||u.x>1439.27||u.y<-.27||u.y>1679.27||u.hp<0||u.hp>u.maxHp||u.maxHp>10000||u.stamina<0||u.stamina>u.maxStamina||u.maxStamina>10000||u.ap<0||u.ap>u.maxAp||u.maxAp>10000||p.distance<0||p.elapsed<0||p.dressings<0||p.dressings>1000)throw Error('Unsupported town progress.');
-  for(const data of [u.ammo,u.ammoPouch])if(!data||typeof data!=='object'||Array.isArray(data)||Object.values(data).some(n=>!Number.isFinite(n)||n<0||n>100000))throw Error('Unsupported town resources.');
-  if(!Array.isArray(u.pack)||u.pack.length>128||!Array.isArray(u.slots)||u.slots.length>16||!['standing','kneeling','prone'].includes(u.stance))throw Error('Unsupported town equipment.');
+  if(p?.kind!=='farmyard-mount-dora-tour'||p.version!==1||!/^[a-f0-9]{64}$/.test(p.sourceRevision)||!/^[a-f0-9]{64}$/.test(p.artRevision)||u?.id!==0||u.team!=='squad'||!validUnit(u)||
+    ![p.dressings,p.distance,p.elapsed].every(n=>Number.isFinite(n)&&n>=0)||p.dressings>1000)throw Error('Unsupported town progress.');
   const r=p.runtime;
   if(r&&(!['explore','player','enemy','lost','won'].includes(r.phase)||!['active','lost'].includes(r.status)||typeof r.engaged!=='boolean'||(r.phase==='lost')!==(r.status==='lost')||!Number.isSafeInteger(r.round)||r.round<0||!Number.isSafeInteger(r.seed)||r.seed<0||r.seed>0xffffffff||!Number.isInteger(r.enemyIndex)||r.enemyIndex<1||r.enemyIndex>129||!Number.isFinite(r.enemyDelay)||r.enemyDelay<0||r.enemyDelay>60||!Array.isArray(r.fires)||r.fires.length>1000||!Array.isArray(r.objects)||r.objects.length>1000||r.areaWeapon!==undefined&&!['grenade','flamethrower'].includes(r.areaWeapon)))throw Error('Unsupported town gameplay progress.');
   if((u.hp===0)!==(r?.status==='lost'))throw Error('Unsupported town casualty progress.');
+  if(r?.guards!==undefined&&(!Array.isArray(r.guards)||r.guards.length>42||r.guards.some(g=>!validUnit(g)||g.team!=='guard'||!Number.isInteger(g.id)||g.id<1||g.id>42)||new Set(r.guards.map(g=>g.id)).size!==r.guards.length))throw Error('Unsupported town guard progress.');
   p.status=r?.status||'active';p.seen=TownExplored.restore(p.explored);return p;
 }

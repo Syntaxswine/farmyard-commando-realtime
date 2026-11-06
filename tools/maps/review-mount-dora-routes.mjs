@@ -116,6 +116,10 @@ for(const [x,y]of cornerTown)assert(parent[Math.floor(y)*width+Math.floor(x)],'D
 const nativeWalls={wallRuns:{version:1,segments:walls}};
 const game=p=>({x:p[0]-.5,y:p[1]-.5,h:.8});
 for(let i=1;i<cornerTown.length;i++)assert(!wallRunsIntersect(nativeWalls,game(cornerTown[i-1]),game(cornerTown[i]),{radius}));
+for(const sector of project.sectors)if(sector.guard){
+ const x=sector.origin.x+sector.guard.x,y=sector.origin.y+sector.guard.y;
+ assert(parent[y*width+x],sector.id+' sentry post must be reachable from town.');
+}
 assert(!wallRunsIntersect(nativeWalls,game([460.5,508.5]),game([488.5,508.5]),{radius}));
 for(let x=460;x<=488;x++)assert(open[508*width+x],'Clear source approach cannot cross blocked terrain or a vegetation anchor.');
 assert(wallRunsIntersect(nativeWalls,game([480.5,508.5]),game([480.5,500.5]),{radius}));

@@ -1,5 +1,5 @@
 import {blockWindow,gridDimensions,worldBounds} from './world-grid.js';
-import {FIELD_CAMERA} from './grenade-controls.js';
+import {FIELD_CAMERA,fieldCameraFor} from './grenade-controls.js';
 
 export function windowChanges(previous,next){
   const old=new Map((previous?.blocks||[]).map(block=>[block.id,block]));
@@ -14,8 +14,8 @@ export function clampCameraPoint(state,point){
 
 // Orthographic ground-plane half extents per metre of vertical camera span.
 // A wide landscape viewport can otherwise see beyond the nine resident blocks.
-export function groundCameraExtents(viewport){
-  const {x,y,z}=FIELD_CAMERA,horizontal=Math.hypot(x,z),length=Math.hypot(horizontal,y),aspect=viewport.width/viewport.height;
+export function groundCameraExtents(viewport,camera=FIELD_CAMERA){
+  const {x,y,z}=camera,horizontal=Math.hypot(x,z),length=Math.hypot(horizontal,y),aspect=viewport.width/viewport.height;
   return {x:(Math.abs(z)*aspect+Math.abs(x)*length/y)/horizontal/2,y:(Math.abs(x)*aspect+Math.abs(z)*length/y)/horizontal/2};
 }
 
@@ -23,7 +23,7 @@ export function groundCameraExtents(viewport){
 // still touches at most four 240m source sectors. Simulation bounds never change.
 export const MAX_CAMERA_SPAN=70;
 function fittedSpan(state,focus,viewport,window,requested){
-  const bounds=worldBounds(state),extent=groundCameraExtents(viewport);let span=requested;
+  const bounds=worldBounds(state),extent=groundCameraExtents(viewport,fieldCameraFor(state));let span=requested;
   if(window.x>bounds.x)span=Math.min(span,(focus.x-window.x+.5)/extent.x);
   if(window.x+window.w<bounds.x+bounds.w)span=Math.min(span,(window.x+window.w-.5-focus.x)/extent.x);
   if(window.y>bounds.y)span=Math.min(span,(focus.y-window.y+.5)/extent.y);

@@ -7,7 +7,7 @@ import {TOUR_SAVE,readTourProgress} from './mount-dora-progress.js';
 import {ANIMALS,PRIMARY,SECONDARY,DEFAULT_BUILD,MISSIONS,FIRST_REALTIME_MISSION,DEFAULT_MISSION_ID,getMission,missionForState,missionMap,objectiveSecured,missionDestination,Core,normalizeBuild,buildStats,createSoloGame,hero,interaction,interact,dressing,tick,encodeSave,decodeSave,distance} from './solo-game.js';
 import {FieldView,drawMinimap} from './field-view.js';
 import {cycleStep,nextCameraFocus,bindPressHold,bindHeldTrigger} from './mobile-controls.js';
-import {GrenadeAim,screenToGround} from './grenade-controls.js';
+import {GrenadeAim,fieldCameraFor,screenToGround} from './grenade-controls.js';
 import {FlameAim} from './flame-controls.js';
 import {weaponArtwork} from './original-art.js';
 import {STANCE_ICONS} from './aft/tactics/battle-control-icons.js';
@@ -54,7 +54,7 @@ function renderTourStatus(){
 $('tour-retry').onclick=()=>{if(!isTour(state))return;if(tourArtError){const progress=readTourProgress(encodeSave(state));launchTour({progress});}else getTourWorld(state).retry();};
 function tourMenu(){
   storage.write();const u=hero(state);
-  showDialog('<p class="eyebrow">MOUNT DORA / WALKING TOUR</p><h2>Explore the town.</h2><p>'+safe(u.name)+' · '+short(u.weapon)+'<br>'+Math.round(state.solo.distance)+' metres walked. No extraction requirement. Standard weapons, turns and interactions are enabled.</p>',[
+  showDialog('<p class="eyebrow">MOUNT DORA / WALKING TOUR</p><h2>Explore the town.</h2><p>'+safe(u.name)+' · '+short(u.weapon)+'<br>'+Math.round(state.solo.distance)+' metres walked. Sentries are posted throughout town. Weapons and interactions use normal gameplay rules.</p>',[
     ['Continue walking',()=>{},'primary'],['Visit landmark',tourVisits],...weaponActions('Inventory & equipment'),['Tour notes',tourNotes],['Controls',help],
     ['Choose animal or operation',backToPrep],['Title screen',()=>{storage.write();location.assign('./');}],['Start a new walking tour',()=>launchTour()]
   ]);
@@ -684,8 +684,8 @@ function resetStick(){const pointer=stickPointer;stickPointer=null;if(pointer!==
 function updateStick(e){
   const r=$('joystick').getBoundingClientRect(),dx=e.clientX-r.left-r.width/2,dy=e.clientY-r.top-r.height/2,limit=r.width*.3,n=Math.hypot(dx,dy),scale=Math.min(1,limit/Math.max(1,n));
   stick=n<(aiming()?limit*.12:9)?{x:0,y:0}:{x:dx*scale/limit,y:dy*scale/limit};$('stick-knob').style.transform=`translate(calc(-50% + ${stick.x*limit}px),calc(-50% + ${stick.y*limit}px))`;
-  if(flameAim.active){flameAim.aim(stick);renderFlameControls();}
-  else if(grenadeAim.active){grenadeAim.aim(hero(state),stick,Core.WEAPONS.grenade.range);updateGrenadePreview();}else view?.center();
+  if(flameAim.active){flameAim.aim(stick,fieldCameraFor(state));renderFlameControls();}
+  else if(grenadeAim.active){grenadeAim.aim(hero(state),stick,Core.WEAPONS.grenade.range,fieldCameraFor(state));updateGrenadePreview();}else view?.center();
 }
 $('joystick').onpointerdown=e=>{if(e.button!==0||stickPointer!==null||!state||paused||!Core.canControl(state,hero(state)))return;e.preventDefault();view?.unlockSound?.();stickPointer=e.pointerId;$('joystick').setPointerCapture(e.pointerId);Core.stop(state);selected=null;if(!aiming())view.route([]);updateStick(e);};$('joystick').onpointermove=e=>{if(e.pointerId===stickPointer)updateStick(e);};
 for(const name of ['pointerup','pointercancel','lostpointercapture'])$('joystick').addEventListener(name,e=>{if(e.pointerId===stickPointer){resetStick();if(grenadeAim.active)renderGrenadeControls();if(flameAim.active)renderFlameControls();}});
@@ -722,9 +722,9 @@ function frame(now){
     if(state.realtime)state.realtime.suspended=aiming()||pointTargeting;
     if(aiming()){
       if(!Core.canControl(state,hero(state)))cancelAreaAim();
-      else{Core.stop(state);if(keys.size){if(flameAim.active){flameAim.aim({x,y});renderFlameControls();}else{grenadeAim.nudge(hero(state),{x,y},Core.WEAPONS.grenade.range,dt);updateGrenadePreview();}}}
+      else{Core.stop(state);if(keys.size){const camera=fieldCameraFor(state);if(flameAim.active){flameAim.aim({x,y},camera);renderFlameControls();}else{grenadeAim.nudge(hero(state),{x,y},Core.WEAPONS.grenade.range,dt,camera);updateGrenadePreview();}}}
       tick(state,dt);
-    }else{if(Math.hypot(x,y)>.1&&view.focusedId!=null)view.center();tick(state,dt,Math.hypot(x,y)>.1?screenToGround(x,y):null);}
+    }else{if(Math.hypot(x,y)>.1&&view.focusedId!=null)view.center();tick(state,dt,Math.hypot(x,y)>.1?screenToGround(x,y,fieldCameraFor(state)):null);}
     if(state.phase!==lastPhase){if(!state.realtime||state.solo.status!=='active'){resetStick();keys.clear();cancelAreaAim();Core.stop(state);}lastPhase=state.phase;contextKey='';}
     if(now-lastSave>2500){storage.write();lastSave=now;}
   }

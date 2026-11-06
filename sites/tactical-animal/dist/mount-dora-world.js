@@ -4,6 +4,7 @@ import {blockWindow} from './world-grid.js';
 export const TOWN_LIMITS=Object.freeze({decodedSectors:9,concurrentFetches:2,pendingFetches:9,sectorBytes:4_000_000});
 export const TOWN_GROUNDS=Object.freeze(['ground-grass','water','woodland','ground-dirt','ground-gravel','ground-asphalt','ground-concrete','ground-wood-planks','bridge','floor']);
 const groundKinds=new Set(TOWN_GROUNDS),EPS=1e-7,BUCKET=8;
+const plantKinds=new Set(['tree-broadleaf','tree-pine','bush','reeds']);
 export const sha256=async bytes=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(n=>n.toString(16).padStart(2,'0')).join('');
 const intersect=(a,b)=>a[0]<=b[2]&&a[2]>=b[0]&&a[1]<=b[3]&&a[3]>=b[1];
 const boxDistance=(p,b)=>Math.hypot(Math.max(b[0]-p.x,0,p.x-b[2]),Math.max(b[1]-p.y,0,p.y-b[3]));
@@ -41,12 +42,19 @@ export function validateTownProject(p){
   if(p?.id!=='mount-dora-downtown'||p.sectorSize!==240||p.columns!==6||p.rows!==7||p.extent?.widthM!==1440||p.extent?.depthM!==1680||!Array.isArray(p.sectors)||p.sectors.length!==42)throw Error('Unsupported Mount Dora project extent.');
   const ids=new Set(),cells=new Set();
   for(const s of p.sectors){const key=s.column+','+s.row;if(ids.has(s.id)||cells.has(key)||!Number.isInteger(s.column)||!Number.isInteger(s.row)||s.column<0||s.column>=6||s.row<0||s.row>=7||s.origin?.x!==s.column*240||s.origin?.y!==s.row*240||!/^sectors\/[A-F]0[1-7]\.map\.json$/.test(s.file)||!/^[a-f0-9]{64}$/.test(s.metrics?.sha256))throw Error('Unsupported town sector '+s.id);ids.add(s.id);cells.add(key);}
+  for(const s of p.sectors){
+    const g=s.guard;
+    if(g&&(![g.x,g.y].every(n=>Number.isInteger(n)&&n>=0&&n<240)||g.z!==0||g.species!=='pig-foreman'||g.weapon!=='pistol'||!Number.isFinite(g.heading)))throw Error('Invalid guard post in '+s.id);
+    if(p.generation?.version>=6&&!!g!==s.nativeImport?.ready)throw Error('Missing land/water guard coverage in '+s.id);
+  }
   return p;
 }
 export function decodeTownSector(raw,sector,visualReplacement=new Set(),physicalReplacement=new Set()){
   if(raw?.version!==2||raw.width!==240||raw.height!==240||raw.mountDora?.sectorId!==sector.id||!Array.isArray(raw.terrain)||raw.terrain.length!==240||raw.terrain.some(row=>!Array.isArray(row)||row.length!==240||row.some(t=>!groundKinds.has(t))))throw Error('Unsupported terrain in '+sector.id);
   if(Object.keys(raw.edges||{}).length||(raw.stairs||[]).length||(raw.climbs||[]).length||raw.buildingPrefabs||raw.slopedRoofs||raw.canopies||raw.farmyardWindows)throw Error('This sector needs an unsupported walking-tour feature: '+sector.id);
   const issues=wallRunErrors(raw);if(issues.length)throw Error(sector.id+': '+issues.join(' '));
+  const posts=raw.guards||[],expected=sector.guard;
+  if(!Array.isArray(posts)||posts.length!==(expected?1:0)||expected&&Object.keys(expected).some(key=>posts[0]?.[key]!==expected[key]))throw Error('Guard post differs from the town atlas in '+sector.id);
   const packet={id:sector.id,sector,raw,walls:new SpatialIndex(),plants:[],plantSolids:new SpatialIndex(),roofs:new Map(),used:0};
   for(const original of raw.wallRuns?.segments||[]){
     if(!Array.isArray(original.sourceBuildingIds)||!original.sourceBuildingIds.length||!original.sourceWallId)throw Error('Native wall lacks global source ownership.');
@@ -62,9 +70,9 @@ export function decodeTownSector(raw,sector,visualReplacement=new Set(),physical
     if(!allRoofsReplaced){const gx=x+sector.origin.x,gy=y+sector.origin.y,id=Math.floor(gx/24)+','+Math.floor(gy/24);if(!packet.roofs.has(id))packet.roofs.set(id,[]);packet.roofs.get(id).push({x:gx,y:gy,level});}
   }
   for(const p of raw.props||[]){
-    if(!['tree-broadleaf','reeds'].includes(p.kind)||(p.z||0)!==0||!Number.isInteger(p.x)||!Number.isInteger(p.y)||p.x<0||p.y<0||p.x>=240||p.y>=240)throw Error('Unsupported native town prop: '+p.kind);
+    if(!plantKinds.has(p.kind)||(p.z||0)!==0||!Number.isInteger(p.x)||!Number.isInteger(p.y)||p.x<0||p.y<0||p.x>=240||p.y>=240)throw Error('Unsupported native town prop: '+p.kind);
     const placed={...p,x:p.x+sector.origin.x,y:p.y+sector.origin.y,id:sector.id+':'+p.kind+':'+p.x+','+p.y};packet.plants.push(placed);
-    if(p.kind==='tree-broadleaf'){const solid={kind:'circle',centre:[placed.x,placed.y],radius:.22,id:placed.id};packet.plantSolids.add(solid,shapeBounds(solid));}
+    if(p.kind.startsWith('tree-')){const solid={kind:'circle',centre:[placed.x,placed.y],radius:.22,id:placed.id};packet.plantSolids.add(solid,shapeBounds(solid));}
   }
   return packet;
 }
@@ -74,6 +82,7 @@ export class TownWorld{
     this.project=validateTownProject(project);this.baseURL=new URL(baseURL||'./maps/mount-dora/',import.meta.url);this.fetcher=(...args)=>fetcher(...args);
     this.width=1440;this.height=1680;this.cache=new Map();this.inFlight=new Map();this.errors=new Map();this.queue=[];this.wanted=new Set();this.pinned=new Set();this.clock=0;this.revision=0;this.listeners=new Set();this.disposed=false;
     this.byId=new Map(project.sectors.map(s=>[s.id,s]));this.byCell=new Map(project.sectors.map(s=>[s.column+','+s.row,s]));
+    this.guardPosts=project.sectors.flatMap(s=>s.guard?[{...s.guard,id:s.row*project.columns+s.column+1,name:s.id+' sentry',x:s.origin.x+s.guard.x,y:s.origin.y+s.guard.y}]:[]);
     this.visualReplacement=new Set(art.REPLACEMENT_SOURCE_IDS||[]);this.physicalReplacement=new Set();this.artIndex=new SpatialIndex();this.closedBuildings=new SpatialIndex();this.artRevision=art.ART_REVISION||'0'.repeat(64);this.placements=art.PLACEMENTS||[];
     for(const placement of this.placements){
       if(placement.collisionPolicy==='replace-source-walls')for(const id of placement.replacesSourceIds||[])this.physicalReplacement.add(id);
@@ -98,6 +107,7 @@ export class TownWorld{
   subscribe(fn){this.listeners.add(fn);return ()=>this.listeners.delete(fn);}
   emit(){this.revision++;this.navigation=null;for(const fn of this.listeners)fn();}
   sectorAt(x,y){return this.byCell.get(Math.floor((x+.5)/240)+','+Math.floor((y+.5)/240));}
+  residentAt(point){return this.cache.has(this.sectorAt(point.x,point.y)?.id);}
   packetForCell(x,y){if(x<0||y<0||x>=this.width||y>=this.height)return null;const sector=this.byCell.get(Math.floor(x/240)+','+Math.floor(y/240)),packet=this.cache.get(sector?.id);if(packet)packet.used=++this.clock;return packet;}
   tile(x,y){if(!Number.isInteger(x)||!Number.isInteger(y))return null;const p=this.packetForCell(x,y);return p?p.raw.terrain[y-p.sector.origin.y][x-p.sector.origin.x]:null;}
   sectorIdsForBounds(bounds){return this.project.sectors.filter(s=>intersect(bounds,[s.origin.x,s.origin.y,s.origin.x+240-EPS,s.origin.y+240-EPS])).map(s=>s.id);}
@@ -160,7 +170,7 @@ export class TownWorld{
     return this.pointClear(p)&&!this.closedBuildings.query([p.x,p.y,p.x,p.y]).some(s=>s.polygons.some(poly=>ringContains(p,poly[0])));
   }
   walkSegment(a,b,radius=.23){const steps=Math.max(1,Math.ceil(Math.hypot(b.x-a.x,b.y-a.y)/.07));for(let i=1;i<=steps;i++)if(!this.pointClear({x:a.x+(b.x-a.x)*i/steps,y:a.y+(b.y-a.y)*i/steps},radius))return false;return true;}
-  lineClear(a,b){const bounds=[Math.min(a.x,b.x),Math.min(a.y,b.y),Math.max(a.x,b.x),Math.max(a.y,b.y)],segments=this.wallsFor(bounds,{walk:true}).map(w=>w.run);return !wallRunsIntersect({wallRuns:{version:1,segments}},{...a,h:a.h??1.1},{...b,h:b.h??1.1});}
+  lineClear(a,b){if(!this.residentAt(a)||!this.residentAt(b))return false;const bounds=[Math.min(a.x,b.x),Math.min(a.y,b.y),Math.max(a.x,b.x),Math.max(a.y,b.y)],segments=this.wallsFor(bounds,{walk:true}).map(w=>w.run);return !wallRunsIntersect({wallRuns:{version:1,segments}},{...a,h:a.h??1.1},{...b,h:b.h??1.1});}
   geometryBoxes(bounds=[-.5,-.5,1439.5,1679.5]){return [...this.wallsFor(bounds,{walk:true}).map(w=>({x0:w.bounds[0],y0:w.bounds[1],x1:w.bounds[2],y1:w.bounds[3],height:WALL_KIT.height,kind:'wall'})),...this.solidsFor(bounds).map(s=>{const b=s.bounds||shapeBounds(s);return {x0:b[0],y0:b[1],x1:b[2],y1:b[3],height:2,kind:'prop'};})];}
   navigationGrid(){return this.navigation||(this.navigation={width:this.width,height:this.height,nodes:sparseStore(16384),walks:sparseStore(131072),standIns:new Map()});}
   reveal(state,unit){

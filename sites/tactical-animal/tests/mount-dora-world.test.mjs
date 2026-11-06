@@ -9,14 +9,14 @@ const base=new URL('../../../maps/mount-dora/',import.meta.url),project=JSON.par
 const fetcher=async url=>new Response(fs.readFileSync(url));
 const make=async options=>new TownWorld(project,{baseURL:base,fetcher,...options}).identify();
 test('walking adapter accepts all 42 released geographic files, including terrain-only water, without changing source',()=>{
-  let walls=0,water=0;
-  for(const sector of project.sectors){const bytes=fs.readFileSync(new URL(sector.file,base)),raw=JSON.parse(bytes),before=JSON.stringify(raw),p=decodeTownSector(raw,sector);assert.equal(JSON.stringify(raw),before);assert.equal(p.raw,raw);walls+=p.walls.records.length;if(!sector.nativeImport.ready){water++;assert(p.raw.terrain.every(r=>r.every(t=>t==='water')));}}
-  assert.equal(walls,6909);assert.equal(water,3);
+  let walls=0,water=0,guards=0;
+  for(const sector of project.sectors){const bytes=fs.readFileSync(new URL(sector.file,base)),raw=JSON.parse(bytes),before=JSON.stringify(raw),p=decodeTownSector(raw,sector);assert.equal(JSON.stringify(raw),before);assert.equal(p.raw,raw);walls+=p.walls.records.length;guards+=raw.guards.length;assert.deepEqual(raw.guards,sector.guard?[sector.guard]:[]);if(!sector.nativeImport.ready){water++;assert(p.raw.terrain.every(r=>r.every(t=>t==='water')));}}
+  assert.equal(walls,6909);assert.equal(water,3);assert.equal(guards,39);
 });
 test('source-backed continuous movement crosses both axes and a four-sector corner without resetting state',async()=>{
   const w=await make();w.startPoint={x:479,y:479};try{await w.readyAt(w.startPoint);const s=createSoloGame(DEFAULT_BUILD,1947,'mount-dora',{tourWorld:w}),u=hero(s),pack=JSON.stringify(u.pack);
-    for(const [x,y]of [[480,479],[480,480],[479,480],[479,479]]){assert(w.walkSegment(u,{x,y}));assert(Math.abs(Core.travel(s,u,x-u.x,y-u.y)-1)<1e-6);assert(Math.abs(u.x-x)<1e-6);assert(Math.abs(u.y-y)<1e-6);assert.equal(s.phase,'explore');assert.equal(s.units.length,1);assert.equal(Core.nearbyInteractions(s).length,0);}
-    assert(Math.abs(s.solo.distance-4)<1e-6);assert.equal(JSON.stringify(u.pack),pack);assert(encodeSave(s).length<20000);assert.equal(s.map.length,1680);assert.equal(s.map[0].length,1440);assert(!Array.isArray(s.map));assert.equal(s.map[0][0],null);
+    for(const [x,y]of [[480,479],[480,480],[479,480],[479,479]]){assert(w.walkSegment(u,{x,y}));assert(Math.abs(Core.travel(s,u,x-u.x,y-u.y)-1)<1e-6);assert(Math.abs(u.x-x)<1e-6);assert(Math.abs(u.y-y)<1e-6);assert.equal(s.phase,'explore');assert.equal(s.units.length,40);assert.equal(Core.nearbyInteractions(s).length,0);}
+    assert(Math.abs(s.solo.distance-4)<1e-6);assert.equal(JSON.stringify(u.pack),pack);assert(encodeSave(s).length<65000);assert.equal(s.map.length,1680);assert.equal(s.map[0].length,1440);assert(!Array.isArray(s.map));assert.equal(s.map[0][0],null);
   }finally{w.dispose();}
 });
 test('boundary-spanning art-centre source wall blocks a crossing but not the open approach',async()=>{

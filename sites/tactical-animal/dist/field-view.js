@@ -12,7 +12,7 @@ import {createGrenadeModel} from './aft/tactics/grenade-model.js';
 import {DaylightRig} from './aft/tactics/daylight-rig.js';
 import {OriginalEnvironment} from './original-art.js';
 import {hero, Core, missionForState, objectiveSecured,realtimeWeaponAim} from './solo-game.js';
-import {FIELD_CAMERA,grenadeCameraFrame} from './grenade-controls.js';
+import {fieldCameraFor,grenadeCameraFrame} from './grenade-controls.js';
 import {InteractionScenery} from './interaction-view.js';
 import {clueAnchorHeight,missionHasArt,SCENERY_DIGEST} from './mission-scenery.js';
 import {SoloFlameEffects} from './flame-effects.js';
@@ -75,7 +75,8 @@ export class FieldView {
       this.span=this.state?residentCameraSpan(this.state,{x:this.target.x,y:this.target.z},viewport,requested,this.residentWindow):requested;
       this.camera.left=-this.span*w/h/2;this.camera.right=this.span*w/h/2;this.camera.top=this.span/2;this.camera.bottom=-this.span/2;this.camera.near=.1;this.camera.far=120;this.camera.updateProjectionMatrix();
     }
-    this.camera.position.copy(this.target).add(V(FIELD_CAMERA.x,FIELD_CAMERA.y,FIELD_CAMERA.z));this.camera.lookAt(this.target);this.camera.updateMatrixWorld();
+    const {x,y,z}=fieldCameraFor(this.state);
+    this.camera.position.copy(this.target).add(V(x,y,z));this.camera.lookAt(this.target);this.camera.updateMatrixWorld();
   }
   projectWorldPoint(point){const r=this.container.getBoundingClientRect(),p=V(point.x,point.h||0,point.y).project(this.camera);return {x:r.left+(p.x+1)*r.width/2,y:r.top+(1-p.y)*r.height/2,visible:p.x>=-1&&p.x<=1&&p.y>=-1&&p.y<=1&&p.z>=-1&&p.z<=1};}
   zoomLimit(){return this.state?residentCameraSpan(this.state,{x:this.target.x,y:this.target.z},{width:this.container.clientWidth,height:this.container.clientHeight},MAX_CAMERA_SPAN):MAX_CAMERA_SPAN;}
@@ -205,7 +206,7 @@ export class FieldView {
     const u=hero(this.state),points=aim.kind==='flame'?(aim.shape?.rays||[]).flatMap(ray=>[{x:ray.x,y:ray.y,z:0},{x:ray.x,y:ray.y,z:1.5}]):aim.point?Core.grenadeTrajectory(u,aim.point):[{x:u.x,y:u.y,z:1.8}];
     points.push({x:u.x,y:u.y,z:0},{x:u.x,y:u.y,z:1.8});
     if(aim.point)for(let i=0;i<16;i++){const a=i/16*Math.PI*2;points.push({x:aim.point.x+Math.cos(a)*Core.WEAPONS.grenade.blast,y:aim.point.y+Math.sin(a)*Core.WEAPONS.grenade.blast,z:0});}
-    const frame=grenadeCameraFrame(points,{width:this.container.clientWidth,height:this.container.clientHeight,...this.getAimViewport?.()},aim.baseSpan);
+    const frame=grenadeCameraFrame(points,{width:this.container.clientWidth,height:this.container.clientHeight,...this.getAimViewport?.()},aim.baseSpan,fieldCameraFor(this.state));
     const blend=T.MathUtils.damp(0,1,-60*Math.log(.86),elapsed);this.target.lerp(V(frame.target.x,0,frame.target.y),blend);this.span+=(frame.span-this.span)*blend;this.resize();
   }
   async actor(u){

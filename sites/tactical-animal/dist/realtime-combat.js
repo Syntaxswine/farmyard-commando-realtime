@@ -56,7 +56,7 @@ export function awardRealtimeKill(state,source){
   }
 }
 
-export function createRealtimeRules({hero,alive,distance,canSee,confirmedImpact,previewAttack,attack,headingTo,flameAffects,previewFlame,fireFlame,completeReload,travel,movePlayer,approachPath,refresh,log,fireRules}){
+export function createRealtimeRules({hero,alive,distance,canSee,confirmedImpact,previewAttack,attack,headingTo,flameAffects,previewFlame,fireFlame,completeReload,travel,movePlayer,approachPath,guardActive=()=>true,refresh,log,fireRules}){
   const heldTriggers=new WeakMap();
   const actor=(s,u)=>s.realtime.actors[u.id]??=(emptyActor(u.weapon));
   function enable(s){
@@ -170,7 +170,7 @@ export function createRealtimeRules({hero,alive,distance,canSee,confirmedImpact,
     }
   }
   function guard(s,g,dt,effects){
-    const a=actor(s,g),u=hero(s);if(!alive(g)||g.burningTurns||!g.alert||!alive(u))return;
+    const a=actor(s,g),u=hero(s);if(!alive(g)||g.burningTurns||!g.alert||!alive(u)||!guardActive(s,g))return;
     const sees=canSee(s,g,u);if(sees){g.lastKnown={x:u.x,y:u.y};a.search=8;}
     const w=WEAPONS[g.weapon];
     if(w.mag&&!g.ammo[g.weapon]&&g.ammoPouch[g.weapon]>0&&!a.reload)reload(s,g);

@@ -1,7 +1,7 @@
 import {TownWorld,sha256} from './mount-dora-world.js';
 import {blockWindow} from './world-grid.js';
 import {TOUR_ID,TOUR_ACTIVITY,getTourWorld} from './mount-dora-activity.js';
-import {createSoloGame,validBuild,hero,Core,log} from './solo-game.js';
+import {createSoloGame,validBuild,hero,Core,freePoint,log} from './solo-game.js';
 import {TownExplored} from './mount-dora-progress.js';
 import {TownEnvironment,drawTownMinimap} from './mount-dora-view.js';
 // Source-reviewed approaches in canonical town metres; open-shelter visits use
@@ -64,9 +64,19 @@ export async function loadTownTour({build,progress=null,signal,fetcher=globalThi
         const r=progress.runtime;if(r.realtime)state.realtime=structuredClone(r.realtime);Object.assign(state,{phase:r.phase,round:r.round,seed:r.seed,engaged:r.engaged,enemyIndex:r.enemyIndex,enemyDelay:r.enemyDelay,fires:structuredClone(r.fires)});
         if(r.panicDelay!==undefined)state.panicDelay=r.panicDelay;
         state.solo.status=r.status;if(r.areaWeapon)state.solo.areaWeapon=r.areaWeapon;
-        for(const saved of r.objects){const object=state.interactables.find(o=>o.id===saved?.id);if(!object)continue;for(const key of ['open','searched','inventory'])if(saved[key]!==undefined)object[key]=structuredClone(saved[key]);}
+        for(const saved of r.guards||[]){
+          const guard=state.units.find(u=>u.id===saved.id&&u.team==='guard');
+          if(!guard||saved.species!==guard.species||!Core.WEAPONS[saved.weapon]||saved.slots.some(kind=>!Core.WEAPONS[kind]))throw Error('Unsupported saved town guard.');
+          Object.assign(guard,structuredClone(saved),{name:guard.name,isMoving:false});
+        }
       }
+      // Restore casualties through the normal body system before applying
+      // each saved container's searched and looted state.
       Core.restoreRuntimeSystems(state);
+      if(progress.runtime?.objects.length){
+        for(const saved of progress.runtime.objects){const object=state.interactables.find(o=>o.id===saved?.id);if(!object)continue;for(const key of ['open','searched','inventory'])if(saved[key]!==undefined)object[key]=structuredClone(saved[key]);}
+        Core.restoreRuntimeSystems(state);
+      }
       if(relocated)log(state,'The town layout has changed. Moved to a clear outdoor approach; your equipment and tour progress are retained.');
       else if(progress.sourceRevision!==world.sourceRevision||progress.artRevision!==world.artRevision)log(state,'The town has been updated. Your saved position is clear and your progress is retained.');
       Core.refresh(state,{forceFog:true});
@@ -80,7 +90,7 @@ export async function visitTownLandmark(state,id){
   world.coverageTarget=target;world.ensureCoverage(blockWindow(state,target),target);world.retry();
   try{
     await world.readyAt(target);if(world.disposed)throw Error('The tour has ended.');
-    if(!world.resumeClear(target))throw Error('That landmark approach is obstructed. Your animal has stayed at its previous location.');
+    if(!world.resumeClear(target)||!freePoint(state,target,u.id))throw Error('That landmark approach is obstructed. Your animal has stayed at its previous location.');
     Core.stop(state);Object.assign(u,target,{isMoving:false});delete state.fogAt;Core.refresh(state,{forceFog:true});log(state,'Visited '+visit.name+'.');
   }finally{
     world.coverageTarget=null;

@@ -29,6 +29,10 @@ CODE = {name: i for i, name in enumerate(KINDS)}
 WIDTHS = {"secondary": 8, "tertiary": 7, "residential": 6, "unclassified": 6,
           "service": 3.5, "pedestrian": 4, "cycleway": 2.5, "footway": 2,
           "path": 1.5, "steps": 1.5, "track": 3, "living_street": 5}
+STREET_CLASSES = {"secondary", "tertiary", "residential", "unclassified", "living_street"}
+STREET_WIDTH = 6
+SIDEWALK_WIDTH = 2
+STREET_SNAP_LIMIT = 4
 PALETTE = {"ground-grass": "#87956c", "water": "#64899a", "woodland": "#426148",
            "ground-dirt": "#bcad83", "ground-gravel": "#b3b0a1", "ground-asphalt": "#676c68",
            "ground-concrete": "#d5cfb8", "ground-wood-planks": "#a28b60", "bridge": "#c3a875", "floor": "#d0c0a1"}
@@ -322,6 +326,90 @@ def road_style(feature):
             "verticalPolicy": "Mapped steps/bridges are flat native authoring proxies; no surveyed elevation inferred."}
 
 
+def author_streets(roads):
+    """Straighten near-cardinal runs without pulling shared junctions apart."""
+    streets = [f for f in roads if f["tags"]["highway"] in STREET_CLASSES
+               and f["geometry"]["type"] == "LineString"]
+    fixed = {tuple(p) for f in roads if f["nativeRoad"]["bridge"] or f["nativeRoad"]["woodSurface"]
+             if f["geometry"]["type"] == "LineString" for p in f["geometry"]["coordinates"]}
+    moves = [{}, {}]
+    for axis in range(2):
+        links = []
+        for street in streets:
+            points = street["geometry"]["coordinates"]
+            for a, b in zip(points, points[1:]):
+                across, along = abs(b[axis] - a[axis]), abs(b[1-axis] - a[1-axis])
+                if along and across <= along * .2 and tuple(a) not in fixed and tuple(b) not in fixed:
+                    links.append((along, tuple(a), tuple(b)))
+        parent, ranges = {}, {}
+
+        def root(point):
+            parent.setdefault(point, point)
+            while point != parent[point]:
+                parent[point] = parent[parent[point]]
+                point = parent[point]
+            return point
+
+        # Fit longer segments first. Each group needs a common integer line
+        # inside every member's allowed displacement.
+        for _, a, b in sorted(links, reverse=True):
+            first, second = root(a), root(b)
+            low_a, high_a = ranges.get(first, (first[axis], first[axis]))
+            low_b, high_b = ranges.get(second, (second[axis], second[axis]))
+            low, high = min(low_a, low_b), max(high_a, high_b)
+            line = round((low + high) / 2)
+            if max(line - low, high - line) <= STREET_SNAP_LIMIT:
+                parent[second] = first
+                ranges[first] = (low, high)
+        for point in parent:
+            leader = root(point)
+            if leader in ranges:
+                low, high = ranges[leader]
+                moves[axis][point] = round((low + high) / 2)
+
+    for feature in roads:
+        if feature["geometry"]["type"] != "LineString":
+            continue
+        points = feature["geometry"]["coordinates"]
+        style = feature["nativeRoad"]
+        line = [[moves[axis].get(tuple(point), point[axis]) for axis in range(2)] for point in points]
+        if line != points:
+            style["centerline"] = line
+        if feature["tags"]["highway"] in STREET_CLASSES:
+            style.update(widthM=STREET_WIDTH, widthSource="standard-game-street",
+                         sidewalk="both", sidewalkWidthM=SIDEWALK_WIDTH,
+                         sidewalkWidthSource="standard-game-street")
+
+
+def paint_roads(terrain, roads, width, depth):
+    # All sidewalks go down before carriageways so intersections stay open.
+    for feature in roads:
+        style, geometry = feature["nativeRoad"], feature["geometry"]
+        if geometry["type"] != "LineString":
+            continue
+        points = style.get("centerline", geometry["coordinates"])
+        sidewalk = style["sidewalk"]
+        sides = (-1, 1) if sidewalk in ("yes", "both") else (1,) if sidewalk == "left" else (-1,) if sidewalk == "right" else ()
+        walk_width = style["sidewalkWidthM"]
+        if len(sides) == 2 and style["widthSource"] == "standard-game-street":
+            # One outer ribbon keeps sidewalks joined at bends.
+            paint_line(terrain, points, style["widthM"] + 2 * walk_width,
+                       CODE["ground-concrete"], width, depth, land_only=True)
+        else:
+            for side in sides:
+                paint_line(terrain, points, walk_width, CODE["ground-concrete"], width, depth,
+                           land_only=True, offset=side * (style["widthM"] + walk_width) / 2)
+    for feature in sorted(roads, key=lambda f: f["nativeRoad"]["widthSource"] == "standard-game-street"):
+        style, geometry = feature["nativeRoad"], feature["geometry"]
+        if geometry["type"] == "MultiPolygon":
+            paint_polygon(terrain, geometry["coordinates"], CODE[style["terrain"]], width, depth, land_only=not style["bridge"])
+        else:
+            bridge, wooden = style["bridge"], style["woodSurface"]
+            paint_line(terrain, style.get("centerline", geometry["coordinates"]), style["widthM"],
+                       CODE["bridge"] if bridge else CODE[style["terrain"]], width, depth,
+                       land_only=not (bridge or wooden), water_code=CODE["bridge"] if wooden else None)
+
+
 EVIDENCE = (("house-reference.json", "county", "Lake County Property Appraiser tax roll and building sketches"),
             ("lidar-roofs.json", "lidar", "USGS 3DEP lidar FL_Peninsular_Lake_2018"),
             ("county-buildings.json", "countyBuildings", "County building sketches OpenStreetMap lacks, placed on the 2018 lidar roofs"),
@@ -613,11 +701,36 @@ def preview_anchors(terrain, blocked, props, origin, size, width):
     return []
 
 
+def guard_post(terrain, blocked, plants, origin, size, width):
+    ox, oy = origin
+    centre = (size - 1) / 2
+    best = None
+    for y in range(8, size - 8):
+        for x in range(8, size - 8):
+            gx, gy = ox + x, oy + y
+            index = gy * width + gx
+            ground = terrain[index]
+            if ground in (WATER, CODE["floor"], CODE["bridge"], CODE["ground-wood-planks"]) or blocked[index]:
+                continue
+            # Prefer a sidewalk near the middle of the sector, away from seam
+            # crossings and the editor's independent squad markers.
+            ground_cost = 0 if ground == CODE["ground-concrete"] else 100
+            choice = ((x - centre) ** 2 + (y - centre) ** 2 + ground_cost, x, y)
+            if best is not None and choice >= best:
+                continue
+            if not any((gx + dx, gy + dy) in plants for dx in (-1, 0, 1) for dy in (-1, 0, 1)):
+                best = choice
+    if best is None:
+        raise ValueError(f"No outdoor guard post in land sector at {origin}.")
+    _, x, y = best
+    return {"x": x, "y": y, "z": 0, "species": "pig-foreman", "weapon": "pistol", "heading": 90}
+
+
 def render_atlas(features, config):
     extent = config["extent"]
     width, depth = extent["widthM"], extent["depthM"]
     out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {depth}" role="img" aria-label="Mount Dora native map atlas">',
-           '<title>Mount Dora — source geometry, local metres</title>', '<desc>OpenStreetMap contributors. Editable geographic authoring approximation. Not a property survey.</desc>',
+           '<title>Mount Dora — playable layout, local metres</title>', '<desc>OpenStreetMap contributors. Editable geographic authoring approximation.</desc>',
            f'<defs><clipPath id="extent"><rect width="{width}" height="{depth}"/></clipPath></defs>', f'<rect width="{width}" height="{depth}" fill="{PALETTE["ground-grass"]}"/>', '<g clip-path="url(#extent)">']
     def paths(polygons):
         return " ".join("M" + " L".join(f"{p[0]},{p[1]}" for p in ring) + " Z" for polygon in polygons for ring in polygon)
@@ -625,11 +738,20 @@ def render_atlas(features, config):
         for feature in features:
             if feature["category"] == kind and feature["geometry"]["type"] == "MultiPolygon":
                 out.append(f'<path d="{paths(feature["geometry"]["coordinates"])}" fill="{color}" fill-rule="evenodd"/>')
-    for feature in features:
+    roads = [f for f in features if f.get("nativeRoad") and f["geometry"]["type"] == "LineString"]
+
+    def road_line(feature, color, width_m):
+        style = feature["nativeRoad"]
+        points = " ".join(f"{p[0]},{p[1]}" for p in style.get("centerline", feature["geometry"]["coordinates"]))
+        return f'<polyline points="{points}" fill="none" stroke="{color}" stroke-width="{width_m}" stroke-linecap="round" stroke-linejoin="round"/>'
+
+    for feature in roads:
+        style = feature["nativeRoad"]
+        if style["widthSource"] == "standard-game-street":
+            out.append(road_line(feature, PALETTE["ground-concrete"], style["widthM"] + 2 * style["sidewalkWidthM"]))
+    for feature in sorted(roads, key=lambda f: f["nativeRoad"]["widthSource"] == "standard-game-street"):
         style = feature.get("nativeRoad")
-        if style and feature["geometry"]["type"] == "LineString":
-            points = " ".join(f"{p[0]},{p[1]}" for p in feature["geometry"]["coordinates"])
-            out.append(f'<polyline points="{points}" fill="none" stroke="{PALETTE["bridge"] if style["bridge"] else PALETTE[style["terrain"]]}" stroke-width="{style["widthM"]}" stroke-linecap="round" stroke-linejoin="round"/>')
+        out.append(road_line(feature, PALETTE["bridge"] if style["bridge"] else PALETTE[style["terrain"]], style["widthM"]))
     for feature in features:
         if feature["category"] == "building" and feature["geometry"]["type"] == "MultiPolygon":
             out.append(f'<path d="{paths(feature["geometry"]["coordinates"])}" fill="{PALETTE["floor"]}" stroke="#6c6254" stroke-width=".6" fill-rule="evenodd"/>')
@@ -690,6 +812,10 @@ def build_project(project=PROJECT):
         if feature["category"] == "water" and feature["geometry"]["type"] == "MultiPolygon":
             paint_polygon(terrain, feature["geometry"]["coordinates"], WATER, width, depth)
     source_water[:] = bytes(1 if value == WATER else 0 for value in terrain)
+    for feature in features:
+        if feature["tags"].get("landuse") == "residential" and feature["geometry"]["type"] == "MultiPolygon":
+            for y, left, right in polygon_spans(feature["geometry"]["coordinates"], width, depth):
+                green[y * width + left:y * width + right] = bytes([4]) * (right - left)
     for kind, value, greenery in (("park", CODE["ground-grass"], 1), ("wood", CODE["woodland"], 2), ("wetland", CODE["ground-grass"], 3), ("beach", CODE["ground-dirt"], 0), ("parking", CODE["ground-asphalt"], 0)):
         for feature in features:
             if feature["category"] == kind and feature["geometry"]["type"] == "MultiPolygon":
@@ -720,24 +846,8 @@ def build_project(project=PROJECT):
             paint_polygon(terrain, polygons, CODE[surface], width, depth, land_only=True)
         for y, left, right in polygon_spans(polygons, width, depth):
             green[y * width + left:y * width + right] = bytes(right - left)
-    # Sidewalks first, then every mapped carriageway/path; no cross-junction curb
-    # paints over a later road. Left/right follow OSM way direction in east/south.
-    for feature in roads:
-        style, geometry = feature["nativeRoad"], feature["geometry"]
-        if geometry["type"] != "LineString":
-            continue
-        sidewalk = style["sidewalk"]
-        sides = (-1, 1) if sidewalk in ("yes", "both") else (1,) if sidewalk == "left" else (-1,) if sidewalk == "right" else ()
-        for side in sides:
-            paint_line(terrain, geometry["coordinates"], 1.5, CODE["ground-concrete"], width, depth, land_only=True, offset=side * (style["widthM"] / 2 + .75))
-    for feature in roads:
-        style, geometry = feature["nativeRoad"], feature["geometry"]
-        if geometry["type"] == "MultiPolygon":
-            paint_polygon(terrain, geometry["coordinates"], CODE[style["terrain"]], width, depth, land_only=not style["bridge"])
-        else:
-            bridge, wooden = style["bridge"], style["woodSurface"]
-            paint_line(terrain, geometry["coordinates"], style["widthM"], CODE["bridge"] if bridge else CODE[style["terrain"]], width, depth,
-                       land_only=not (bridge or wooden), water_code=CODE["bridge"] if wooden else None)
+    terrain_without_roads = bytes(terrain)
+    paint_roads(terrain, roads, width, depth)
     # A county building stands on its 2018 lidar roof. Where the mapped Lake
     # Dora shoreline runs through one, its outline already supports itself
     # over that water, as a mapped footprint may; let the one-metre fit also
@@ -752,6 +862,11 @@ def build_project(project=PROJECT):
                         if fit_terrain[ny * width + nx] == WATER:
                             fit_terrain[ny * width + nx] = CODE["ground-grass"]
     authored = author_buildings(buildings, deduplicated_walls(buildings), fit_terrain, CODE, config['buildingGrid'])
+    # Keep the reviewed building grid on its original source fit. The
+    # playable road widths and alignment are a separate authoring decision.
+    terrain[:] = terrain_without_roads
+    author_streets(roads)
+    paint_roads(terrain, roads, width, depth)
     # A mapped shelter deck supplies support over water, never invented land.
     structures = []
     for source_id in ('osm-way-557051211', 'osm-way-557154683', 'osm-way-557154684'):
@@ -832,14 +947,15 @@ def build_project(project=PROJECT):
         if feature["geometry"]["type"] == "Point" and feature["tags"].get("natural") == "tree":
             x, y = feature["geometry"]["coordinates"]
             add_prop(math.floor(x), math.floor(y), "tree-pine" if feature["tags"].get("leaf_type") == "needleleaved" else "tree-broadleaf", feature["id"])
-    for gy in range(4, depth, 12):
-        for gx in range(4, width, 12):
+    for gy in range(4, depth, 10):
+        for gx in range(4, width, 10):
             seed = mixed_hash(gx, gy)
             x, y = gx + (seed % 7) - 3, gy + ((seed >> 4) % 7) - 3
             value = green[y * width + x]
-            chance = {0: 0, 1: 25, 2: 80, 3: 50}[value]
+            chance = {0: 0, 1: 42, 2: 84, 3: 64, 4: 16}[value]
             if (seed >> 12) % 100 < chance:
-                add_prop(x, y, "reeds" if value == 3 else "tree-broadleaf")
+                kind = "reeds" if value == 3 else "bush" if (seed >> 24) % 3 == 0 else "tree-broadleaf"
+                add_prop(x, y, kind)
     outputs, sectors = {'authored-buildings.json': encoded(authored)}, []
     config_digest = sha((project / "source" / "authoring-config.json").read_bytes())
     digest = sha(encoded(source_records))
@@ -851,12 +967,13 @@ def build_project(project=PROJECT):
             runs = sorted(wall_pieces[sid], key=lambda r: r["id"])
             props = sorted(props_by_sector[sid], key=lambda p: (p["y"], p["x"], p["kind"]))
             anchors = preview_anchors(terrain, blocked, props, (ox, oy), size, width)
+            guard = guard_post(terrain, blocked, prop_cells, (ox, oy), size, width) if anchors else None
             levels = max(3, max((run["stories"] + 1 for run in runs), default=3),
                          max((layer + 1 for key_sid, layer in upper if key_sid == sid), default=3))
             mapping = {"version": 2, "width": size, "height": size, "levels": levels, "name": f"Mount Dora {sid} - native authoring sector",
                        "terrain": [[KINDS[value] for value in cells[y * size:(y + 1) * size]] for y in range(size)],
                        "upper": [upper.get((sid, z), {}) for z in range(1, levels)], "edges": {}, "stairs": [], "climbs": [], "props": props,
-                       "starts": anchors[:4], "guards": [], "exits": anchors[4:],
+                       "starts": anchors[:4], "guards": [guard] if guard else [], "exits": anchors[4:],
                        "mountDora": {"version": 1, "projectId": config["id"], "sectorId": sid, "originM": {"x": ox, "y": oy},
                                      "sourceDigest": digest, "authoredLayoutSHA256": layout_digest, "buildingIds": sorted(sector_buildings[sid]),
                                      "previewAnchors": "Authoring-validator markers on existing connected land; not real spawn/extraction locations.",
@@ -881,9 +998,9 @@ def build_project(project=PROJECT):
                             "neighbors": {"north": sector_id(col,row-1) if row else None, "east": sector_id(col+1,row) if col+1 < extent["columns"] else None,
                                           "south": sector_id(col,row+1) if row+1 < extent["rows"] else None, "west": sector_id(col-1,row) if col else None},
                             "bounds": {"x": ox, "y": oy, "widthM": size, "depthM": size}, "nativeImport": native_import, "metrics": metrics,
-                            "buildingIds": sorted(sector_buildings[sid])})
+                            "buildingIds": sorted(sector_buildings[sid]), "guard": guard})
     feature_database = {"kind": "mount-dora-source-features", "version": 1, "id": config["id"], "projection": config["projection"],
-                        "coordinates": "Local east/south metres; buildings use authored integer-edge geometry with geographicGeometry retained. Other features retain projected geographic geometry.",
+                        "coordinates": "Local east/south metres. Buildings retain geographicGeometry; street geometry retains the source line with playable adjustments in nativeRoad.centerline.",
                         "authoredLayoutSHA256": layout_digest,
                         "authoredStructures": structures,
                         "sources": source_records, "features": features, "diagnostics": diagnostics}
@@ -892,15 +1009,18 @@ def build_project(project=PROJECT):
     manifest = {"kind": "mount-dora-native-project", "version": 1, "id": config["id"], "name": config["name"], "target": config["target"],
                 "projection": config["projection"], "extent": {"widthM": width, "depthM": depth}, "sectorSize": size, "columns": extent["columns"], "rows": extent["rows"],
                 "featuresFile": "features.json", "atlasFile": "atlas.svg", "authoredBuildingsFile": "authored-buildings.json", "sectors": sectors, "sources": source_records,
-                "generation": {"tool": "tools/maps/build-mount-dora.py", "version": 5, "configFile": "source/authoring-config.json", "configSHA256": config_digest,
+                "generation": {"tool": "tools/maps/build-mount-dora.py", "version": 6, "configFile": "source/authoring-config.json", "configSHA256": config_digest,
                                "authoredLayoutSHA256": layout_digest, "evidenceInputs": evidence_inputs,
                                "sourceDigest": digest, "terrainCodebook": list(KINDS), "globalTerrainSHA256": sha(terrain),
                                "sampleRule": "Global cell centre (column*240+x+0.5, row*240+y+0.5); one global raster sliced without seam repaint.",
                                "nativeCoordinates": "Wall metre endpoints = global east/south - sectorOrigin - 0.5; tile indices remain integer cells.",
-                               "defaultRoadWidthsM": WIDTHS, "sidewalkWidthM": 1.5, "sidewalkPresence": "Mapped sidewalk=yes/both/left/right only; separate footways retain their source geometry.",
+                               "streets": {"classes": sorted(STREET_CLASSES), "widthM": STREET_WIDTH, "sidewalkWidthM": SIDEWALK_WIDTH,
+                                           "snapLimitMPerAxis": STREET_SNAP_LIMIT, "policy": "Near-cardinal street runs align to a common metre line. Connected source nodes stay joined. Bridge and boardwalk points stay fixed."},
+                               "defaultRoadWidthsM": WIDTHS,
                                "waterPolicy": "Fill complete source polygons first; land cover never creates land in water. Only mapped building footprints, bridges or wooden-surface paths can provide source-backed support over water; a county building on its lidar roof is such a footprint, and its one-metre fit may take the mapped water within three cells of it.",
-                               "vegetation": {"seed": 1947, "gridM": 12, "jitterM": 3, "parkAcceptancePercent": 25, "woodAcceptancePercent": 80, "wetlandAcceptancePercent": 50,
-                                              "policy": "Mapped tree cell proxies plus declared seeded broadleaf/reed scatter on mapped land vegetation, excluding all mapped sports pitches; not surveyed species or individual tree positions."},
+                               "vegetation": {"seed": 1947, "gridM": 10, "jitterM": 3, "parkAcceptancePercent": 42, "woodAcceptancePercent": 84, "wetlandAcceptancePercent": 64, "residentialAcceptancePercent": 16,
+                                              "policy": "Seeded trees, shrubs and reeds dress mapped parks, woods, wetlands and open land in residential areas. Mapped sports pitches are excluded. Individual plants are gameplay scenery."},
+                               "guardPolicy": "One fictional opponent post on each land-bearing sector. The three open-water sectors have no ground posts.",
                                "sportsSurfaces": "Mapped pitch polygons exclude procedural greenery; tennis/pickleball use a declared existing asphalt proxy unless a supported source surface tag is present. No invented court lines or current inventory claim.",
                                "buildingDefaults": {"stories": 1, "material": "brick", "heightM": 2, "slabM": .12, "pitchM": 2.12,
                                                     "policy": "Native-kit closed exterior proxies on one-metre integer-edge plans; geographic outlines retained separately; courtyard holes and shared party wall relationships retained; no invented entrances/interiors.",
@@ -913,17 +1033,17 @@ def build_project(project=PROJECT):
                             "featureCategories": dict(sorted(Counter(f["category"] for f in features).items())), "buildingCount": len(buildings), "countyBuildings": sum("county" in f for f in buildings),
                             "crossSectorBuildings": sum(len(f["nativeSectors"]) > 1 for f in buildings), "roadCount": len(roads),
                             "excludedProposedRoads": sum("nativeOmission" in f for f in features), "wallRuns": sum(len(r) for r in wall_pieces.values()),
-                            "props": sum(len(p) for p in props_by_sector.values()), "terrainCounts": {KINDS[k]: v for k, v in sorted(Counter(terrain).items())},
+                            "props": sum(len(p) for p in props_by_sector.values()), "guards": sum(s["guard"] is not None for s in sectors), "terrainCounts": {KINDS[k]: v for k, v in sorted(Counter(terrain).items())},
                             "unrepresentedWallSlivers": sum(d["kind"] == "wall-sliver-below-native-minimum" for d in diagnostics)},
-                "limitations": ["Geographic map-authoring source, not a deployed Farmyard mission or a property survey.",
+                "limitations": ["Geographic map-authoring approximation with fictional gameplay placements.",
                                 "Flat terrain. Storeys and wall materials follow recorded evidence (nativeProxy sources) as whole native-kit storeys, not measured wall heights; no interiors or entrances are inferred.",
                                 "Building outlines are deliberately generalized to cardinal integer tile edges; original geographic outlines remain in geographicGeometry and raw source snapshots.",
                                 "County buildings come from appraiser sketches placed on December 2018 lidar roofs; a few stand where the lidar saw no building class, and the mapped Lake Dora shoreline runs through six lakeside ones.",
                                 "The former depot is relocated approximately6.2m to preserve its proportions while clearing the original streets; other fitting changes are recorded in authored-buildings.json.",
                                 "Native wall butt joints and per-run texture phases retain the workshop's existing limits; curved decorative parts and the lighthouse remain curved.",
                                 "Water-only sectors remain complete in the atlas/source but the existing four-start/one-exit native validator refuses them.",
-                                "Road widths, sidewalk widths, bridge/steps heights and seeded vegetation are declared authoring approximations, not measurements.",
-                                "No suggested future roads are painted; no enemies or gameplay objectives are authored."]}
+                                "Street widths, sidewalk widths, bridge/steps heights and seeded vegetation are declared authoring approximations.",
+                                "No suggested future roads or gameplay objectives are authored."]}
     outputs["project.json"] = encoded(manifest, pretty=True)
     return outputs, manifest, feature_database, terrain
 
