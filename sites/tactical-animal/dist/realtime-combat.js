@@ -1,6 +1,7 @@
 import {WEAPONS} from './aft/tactics/solo-weapon-data.js';
 import {AIM_LEVELS} from './aft/tactics/aim-levels.js';
 import {weaponSkill,refreshStats} from './aft/tactics/character-stats.js';
+import {patrolDestination} from './aft/tactics/character-patrol.js';
 
 // Seconds, independent of frame rate and of the inherited turn/AP scheduler.
 export const WEAPON_TIMING=Object.freeze({
@@ -56,8 +57,8 @@ export function awardRealtimeKill(state,source){
   }
 }
 
-export function createRealtimeRules({hero,alive,distance,canSee,confirmedImpact,previewAttack,attack,headingTo,flameAffects,previewFlame,fireFlame,completeReload,travel,movePlayer,approachPath,guardActive=()=>true,refresh,log,fireRules}){
-  const heldTriggers=new WeakMap();
+export function createRealtimeRules({hero,alive,distance,canSee,confirmedImpact,previewAttack,attack,headingTo,flameAffects,previewFlame,fireFlame,completeReload,travel,movePlayer,approachPath,navigationPath,guardActive=()=>true,refresh,log,fireRules}){
+  const heldTriggers=new WeakMap(),patrolDetours=new WeakMap();
   const actor=(s,u)=>s.realtime.actors[u.id]??=(emptyActor(u.weapon));
   function enable(s){
     if(!s.realtime){
@@ -169,8 +170,35 @@ export function createRealtimeRules({hero,alive,distance,canSee,confirmedImpact,
       if(a.reload.remaining<=1e-7){a.reload=null;completeReload(s,u);a.cooldown=Math.max(a.cooldown,.1);}
     }
   }
+  function walkGuard(s,g,point,speed,dt){
+    const d=distance(g,point);if(d<=1e-7)return true;
+    const fraction=Math.min(1,speed*dt/d);
+    return travel(s,g,(point.x-g.x)*fraction,(point.y-g.y)*fraction,{enemy:true})>0;
+  }
+  function walkPatrol(s,g,dt){
+    if(!g.patrol?.length)return;
+    const point=g.patrol[g.patrolIndex??0];
+    // The AFT scheduler uses tile arrivals. Normalize sub-micrometre drift
+    // after continuous travel so it advances exactly once per waypoint.
+    if(point&&distance(g,point)<=1e-7){g.x=point.x;g.y=point.y;}
+    const target=patrolDestination({clock:{minutes:s.realtime.time/60}},g);
+    if(!target)return;
+    g.running=false;
+    let detour=patrolDetours.get(g);
+    if(detour?.target!==target){patrolDetours.delete(g);detour=null;}
+    const route=detour?.route;
+    while(route?.length&&distance(g,route[0])<.06)route.shift();
+    if(walkGuard(s,g,route?.[0]??target,2.2,dt))return;
+    // Authored legs are clear when placed. Use ordinary navigation if a
+    // guard is displaced during combat or another animal is in the way.
+    if(!detour||s.realtime.time>=detour.retryAt){
+      patrolDetours.set(g,{target,route:navigationPath(s,g,target.x,target.y)||[],retryAt:s.realtime.time+1});
+    }
+  }
   function guard(s,g,dt,effects){
-    const a=actor(s,g),u=hero(s);if(!alive(g)||g.burningTurns||!g.alert||!alive(u)||!guardActive(s,g))return;
+    const a=actor(s,g),u=hero(s);if(!alive(g)||g.burningTurns||!alive(u)||!guardActive(s,g))return;
+    if(!g.alert){walkPatrol(s,g,dt);return;}
+    if(g.patrol?.length){g.running=true;patrolDetours.delete(g);}
     const sees=canSee(s,g,u);if(sees){g.lastKnown={x:u.x,y:u.y};a.search=8;}
     const w=WEAPONS[g.weapon];
     if(w.mag&&!g.ammo[g.weapon]&&g.ammoPouch[g.weapon]>0&&!a.reload)reload(s,g);
@@ -186,7 +214,7 @@ export function createRealtimeRules({hero,alive,distance,canSee,confirmedImpact,
     if(!a.repath){a.route=approachPath(s,g,g.lastKnown)||[];a.repath=.75+(g.id%3)*.1;}
     while(a.route.length&&distance(g,a.route[0])<.08)a.route.shift();
     const next=a.route[0];
-    if(next){const d=distance(g,next),step=Math.min(d,7.2*dt);if(!travel(s,g,(next.x-g.x)/d*step,(next.y-g.y)/d*step,{enemy:true}))a.route=[];}
+    if(next){if(!walkGuard(s,g,next,7.2,dt))a.route=[];}
     else if(!sees){a.search-=dt;if(a.search<=0){g.alert=false;g.lastKnown=null;a.search=8;}}
   }
   function step(s,dt,input){

@@ -1,17 +1,25 @@
 import {WALL_KIT,wallRunErrors,wallRunsIntersect,wallPanels,shiftWallRun} from './mount-dora-source/wall-runs.js';
 import {TownExplored} from './mount-dora-progress.js';
 import {blockWindow} from './world-grid.js';
+import {trunkDistance,trunkSpan} from './trunk-geometry.js';
+import {MATURE_TREE_SCALE} from './aft/tactics/biome-foliage-data.js';
+import {groundHash} from './aft/tactics/biome-ground-composition.js';
+import {patrolError} from './aft/tactics/character-patrol.js';
 export const TOWN_LIMITS=Object.freeze({decodedSectors:9,concurrentFetches:2,pendingFetches:9,sectorBytes:4_000_000});
 export const TOWN_GROUNDS=Object.freeze(['ground-grass','water','woodland','ground-dirt','ground-gravel','ground-asphalt','ground-concrete','ground-wood-planks','bridge','floor']);
 const groundKinds=new Set(TOWN_GROUNDS),EPS=1e-7,BUCKET=8;
-const plantKinds=new Set(['tree-broadleaf','tree-pine','bush','reeds']);
+const sentryWeapons=new Set(['pistol','smg','rifle','shotgun']);
+const nativeSentries=s=>s.guards??(s.guard?[s.guard]:[]);
+const nativePoint=p=>p&&[p.x,p.y].every(n=>Number.isInteger(n)&&n>=0&&n<240)&&p.z===0;
+const sentryFields=g=>[g?.id,g?.x,g?.y,g?.z,g?.species,g?.weapon,g?.heading,g?.patrolSource,Array.isArray(g?.patrol)?g.patrol.map(p=>[p?.x,p?.y,p?.z,p?.waitSeconds]):g?.patrol];
+const plantKinds=new Set(['tree-broadleaf','tree-pine','tree-broadleaf-large','tree-pine-large','bush','reeds']);
 export const sha256=async bytes=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(n=>n.toString(16).padStart(2,'0')).join('');
 const intersect=(a,b)=>a[0]<=b[2]&&a[2]>=b[0]&&a[1]<=b[3]&&a[3]>=b[1];
 const boxDistance=(p,b)=>Math.hypot(Math.max(b[0]-p.x,0,p.x-b[2]),Math.max(b[1]-p.y,0,p.y-b[3]));
 const segmentDistance=(p,a,b)=>{const dx=b[0]-a[0],dy=b[1]-a[1],n=dx*dx+dy*dy,t=n?Math.max(0,Math.min(1,((p.x-a[0])*dx+(p.y-a[1])*dy)/n)):0;return Math.hypot(p.x-a[0]-t*dx,p.y-a[1]-t*dy);};
 function ringContains(p,ring){let inside=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const a=ring[i],b=ring[j];if((a[1]>p.y)!==(b[1]>p.y)&&p.x<(b[0]-a[0])*(p.y-a[1])/(b[1]-a[1])+a[0])inside=!inside;}return inside;}
 export function solidDistance(s,p){
-  if(s.kind==='circle')return Math.max(0,Math.hypot(p.x-s.centre[0],p.y-s.centre[1])-s.radius);
+  if(s.kind==='circle')return trunkDistance(p,s);
   if(s.kind==='segment')return Math.max(0,segmentDistance(p,s.a,s.b)-s.radius);
   if(s.kind!=='polygon')throw Error('Unsupported landmark collision kind: '+s.kind);
   let distance=Infinity;
@@ -42,20 +50,28 @@ export function validateTownProject(p){
   if(p?.id!=='mount-dora-downtown'||p.sectorSize!==240||p.columns!==6||p.rows!==7||p.extent?.widthM!==1440||p.extent?.depthM!==1680||!Array.isArray(p.sectors)||p.sectors.length!==42)throw Error('Unsupported Mount Dora project extent.');
   const ids=new Set(),cells=new Set();
   for(const s of p.sectors){const key=s.column+','+s.row;if(ids.has(s.id)||cells.has(key)||!Number.isInteger(s.column)||!Number.isInteger(s.row)||s.column<0||s.column>=6||s.row<0||s.row>=7||s.origin?.x!==s.column*240||s.origin?.y!==s.row*240||!/^sectors\/[A-F]0[1-7]\.map\.json$/.test(s.file)||!/^[a-f0-9]{64}$/.test(s.metrics?.sha256))throw Error('Unsupported town sector '+s.id);ids.add(s.id);cells.add(key);}
+  const withPatrols=p.generation?.version>=7,guardIds=new Set();
   for(const s of p.sectors){
-    const g=s.guard;
-    if(g&&(![g.x,g.y].every(n=>Number.isInteger(n)&&n>=0&&n<240)||g.z!==0||g.species!=='pig-foreman'||g.weapon!=='pistol'||!Number.isFinite(g.heading)))throw Error('Invalid guard post in '+s.id);
-    if(p.generation?.version>=6&&!!g!==s.nativeImport?.ready)throw Error('Missing land/water guard coverage in '+s.id);
+    const posts=nativeSentries(s),primary=s.row*p.columns+s.column+1;
+    if(!Array.isArray(posts)||posts.length>(withPatrols?2:1)||withPatrols&&!Array.isArray(s.guards))throw Error('Invalid guard roster in '+s.id);
+    if(p.generation?.version>=6&&(posts.length>0)!==s.nativeImport?.ready)throw Error('Missing land/water guard coverage in '+s.id);
+    for(const [i,g]of posts.entries()){
+      const id=withPatrols?g?.id:primary;
+      if(!nativePoint(g)||g.species!=='pig-foreman'||!sentryWeapons.has(g.weapon)||!Number.isFinite(g.heading)||g.heading<0||g.heading>=360||guardIds.has(id)||
+        (i===0?id!==primary:!Number.isInteger(id)||id<43||id>45)||patrolError(g.patrol)||g.patrol?.some(p=>!nativePoint(p)))throw Error('Invalid guard post in '+s.id);
+      guardIds.add(id);
+    }
   }
+  if(withPatrols&&guardIds.size!==42)throw Error('The town needs 42 authored sentries.');
   return p;
 }
 export function decodeTownSector(raw,sector,visualReplacement=new Set(),physicalReplacement=new Set()){
   if(raw?.version!==2||raw.width!==240||raw.height!==240||raw.mountDora?.sectorId!==sector.id||!Array.isArray(raw.terrain)||raw.terrain.length!==240||raw.terrain.some(row=>!Array.isArray(row)||row.length!==240||row.some(t=>!groundKinds.has(t))))throw Error('Unsupported terrain in '+sector.id);
   if(Object.keys(raw.edges||{}).length||(raw.stairs||[]).length||(raw.climbs||[]).length||raw.buildingPrefabs||raw.slopedRoofs||raw.canopies||raw.farmyardWindows)throw Error('This sector needs an unsupported walking-tour feature: '+sector.id);
   const issues=wallRunErrors(raw);if(issues.length)throw Error(sector.id+': '+issues.join(' '));
-  const posts=raw.guards||[],expected=sector.guard;
-  if(!Array.isArray(posts)||posts.length!==(expected?1:0)||expected&&Object.keys(expected).some(key=>posts[0]?.[key]!==expected[key]))throw Error('Guard post differs from the town atlas in '+sector.id);
-  const packet={id:sector.id,sector,raw,walls:new SpatialIndex(),plants:[],plantSolids:new SpatialIndex(),roofs:new Map(),used:0};
+  const posts=raw.guards||[],expected=nativeSentries(sector);
+  if(!Array.isArray(posts)||posts.length!==expected.length||posts.some((g,i)=>JSON.stringify(sentryFields(g))!==JSON.stringify(sentryFields(expected[i]))))throw Error('Guard post differs from the town atlas in '+sector.id);
+  const packet={id:sector.id,sector,raw,walls:new SpatialIndex(),plants:new SpatialIndex(),plantSolids:new SpatialIndex(),roofs:new Map(),used:0};
   for(const original of raw.wallRuns?.segments||[]){
     if(!Array.isArray(original.sourceBuildingIds)||!original.sourceBuildingIds.length||!original.sourceWallId)throw Error('Native wall lacks global source ownership.');
     const run=shiftWallRun(original,sector.origin.x,sector.origin.y),key=run.sourceWallId+':'+run.a.join(',')+'>'+run.b.join(',')+':'+run.z+':'+run.stories;
@@ -69,10 +85,32 @@ export function decodeTownSector(raw,sector,visualReplacement=new Set(),physical
     if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>=240||y>=240)throw Error('Invalid upper cell.');
     if(!allRoofsReplaced){const gx=x+sector.origin.x,gy=y+sector.origin.y,id=Math.floor(gx/24)+','+Math.floor(gy/24);if(!packet.roofs.has(id))packet.roofs.set(id,[]);packet.roofs.get(id).push({x:gx,y:gy,level});}
   }
+  const plantCells=new Set();
+  const place=p=>{
+    const {x:localX,y:localY,kind}=p,x=localX+sector.origin.x,y=localY+sector.origin.y;
+    const placed={...p,x,y,id:sector.id+':'+kind+':'+localX+','+localY};
+    packet.plants.add(placed,[x,y,x,y]);
+    return placed;
+  };
   for(const p of raw.props||[]){
     if(!plantKinds.has(p.kind)||(p.z||0)!==0||!Number.isInteger(p.x)||!Number.isInteger(p.y)||p.x<0||p.y<0||p.x>=240||p.y>=240)throw Error('Unsupported native town prop: '+p.kind);
-    const placed={...p,x:p.x+sector.origin.x,y:p.y+sector.origin.y,id:sector.id+':'+p.kind+':'+p.x+','+p.y};packet.plants.push(placed);
-    if(p.kind.startsWith('tree-')){const solid={kind:'circle',centre:[placed.x,placed.y],radius:.22,id:placed.id};packet.plantSolids.add(solid,shapeBounds(solid));}
+    const placed=place(p);
+    plantCells.add(p.x+','+p.y+',0');
+    if(p.kind.startsWith('tree-')){
+      const scale=p.kind.endsWith('-large')?MATURE_TREE_SCALE:1;
+      const solid={kind:'circle',centre:[placed.x,placed.y],radius:.22*scale,trunkHeight:2*scale,id:placed.id};
+      packet.plantSolids.add(solid,shapeBounds(solid));
+    }
+  }
+  if(raw.foliage!==undefined){
+    if(!raw.foliage||typeof raw.foliage!=='object'||Array.isArray(raw.foliage))throw Error('Unsupported native town foliage.');
+    for(const [key,cell] of Object.entries(raw.foliage)){
+      const [x,y]=key.split(',').map(Number),ground=raw.terrain[y]?.[x];
+      if(!Number.isInteger(x)||!Number.isInteger(y)||key!==x+','+y+',0'||plantCells.has(key)||!['woodland','ground-grass'].includes(ground)||
+        !Array.isArray(cell)||cell.length!==3||!Number.isInteger(cell[0])||cell[0]<1||cell[0]>100||cell[1]!==false||cell[2]!=='woodland-v1')throw Error('Unsupported native town foliage: '+key);
+      const wx=x+sector.origin.x,wy=y+sector.origin.y;
+      if(groundHash(wx,wy,1947)*100<cell[0])place({x,y,kind:ground==='woodland'?'woodland-brush':'wetland-brush'});
+    }
   }
   return packet;
 }
@@ -82,7 +120,11 @@ export class TownWorld{
     this.project=validateTownProject(project);this.baseURL=new URL(baseURL||'./maps/mount-dora/',import.meta.url);this.fetcher=(...args)=>fetcher(...args);
     this.width=1440;this.height=1680;this.cache=new Map();this.inFlight=new Map();this.errors=new Map();this.queue=[];this.wanted=new Set();this.pinned=new Set();this.clock=0;this.revision=0;this.listeners=new Set();this.disposed=false;
     this.byId=new Map(project.sectors.map(s=>[s.id,s]));this.byCell=new Map(project.sectors.map(s=>[s.column+','+s.row,s]));
-    this.guardPosts=project.sectors.flatMap(s=>s.guard?[{...s.guard,id:s.row*project.columns+s.column+1,name:s.id+' sentry',x:s.origin.x+s.guard.x,y:s.origin.y+s.guard.y}]:[]);
+    this.guardRosterVersion=project.generation?.version>=7?1:undefined;
+    this.guardPosts=project.sectors.flatMap(s=>nativeSentries(s).map((g,i)=>{
+      const globalPoint=p=>({...p,x:s.origin.x+p.x,y:s.origin.y+p.y});
+      return {...globalPoint(g),id:g.id??s.row*project.columns+s.column+1,name:s.id+' sentry'+(i?' '+(i+1):''),patrol:g.patrol?.map(globalPoint)};
+    }));
     this.visualReplacement=new Set(art.REPLACEMENT_SOURCE_IDS||[]);this.physicalReplacement=new Set();this.artIndex=new SpatialIndex();this.closedBuildings=new SpatialIndex();this.artRevision=art.ART_REVISION||'0'.repeat(64);this.placements=art.PLACEMENTS||[];
     for(const placement of this.placements){
       if(placement.collisionPolicy==='replace-source-walls')for(const id of placement.replacesSourceIds||[])this.physicalReplacement.add(id);
@@ -170,8 +212,25 @@ export class TownWorld{
     return this.pointClear(p)&&!this.closedBuildings.query([p.x,p.y,p.x,p.y]).some(s=>s.polygons.some(poly=>ringContains(p,poly[0])));
   }
   walkSegment(a,b,radius=.23){const steps=Math.max(1,Math.ceil(Math.hypot(b.x-a.x,b.y-a.y)/.07));for(let i=1;i<=steps;i++)if(!this.pointClear({x:a.x+(b.x-a.x)*i/steps,y:a.y+(b.y-a.y)*i/steps},radius))return false;return true;}
-  lineClear(a,b){if(!this.residentAt(a)||!this.residentAt(b))return false;const bounds=[Math.min(a.x,b.x),Math.min(a.y,b.y),Math.max(a.x,b.x),Math.max(a.y,b.y)],segments=this.wallsFor(bounds,{walk:true}).map(w=>w.run);return !wallRunsIntersect({wallRuns:{version:1,segments}},{...a,h:a.h??1.1},{...b,h:b.h??1.1});}
-  geometryBoxes(bounds=[-.5,-.5,1439.5,1679.5]){return [...this.wallsFor(bounds,{walk:true}).map(w=>({x0:w.bounds[0],y0:w.bounds[1],x1:w.bounds[2],y1:w.bounds[3],height:WALL_KIT.height,kind:'wall'})),...this.solidsFor(bounds).map(s=>{const b=s.bounds||shapeBounds(s);return {x0:b[0],y0:b[1],x1:b[2],y1:b[3],height:2,kind:'prop'};})];}
+  lineClear(a,b){
+    if(!this.residentAt(a)||!this.residentAt(b))return false;
+    const bounds=[Math.min(a.x,b.x),Math.min(a.y,b.y),Math.max(a.x,b.x),Math.max(a.y,b.y)];
+    const segments=this.wallsFor(bounds,{walk:true}).map(w=>w.run),za=a.h??1.1,zb=b.h??1.1;
+    if(wallRunsIntersect({wallRuns:{version:1,segments}},{...a,h:za},{...b,h:zb}))return false;
+    for(const packet of this.cache.values())for(const trunk of packet.plantSolids.query(bounds)){
+      const span=trunkSpan(a,b,trunk,za,zb);
+      if(span&&span[1]>EPS&&span[0]<1-EPS)return false;
+    }
+    return true;
+  }
+  geometryBoxes(bounds=[-.5,-.5,1439.5,1679.5]){
+    const walls=this.wallsFor(bounds,{walk:true}).map(w=>({x0:w.bounds[0],y0:w.bounds[1],x1:w.bounds[2],y1:w.bounds[3],height:WALL_KIT.height,kind:'wall'}));
+    const props=this.solidsFor(bounds).map(s=>{
+      const [x0,y0,x1,y1]=s.bounds||shapeBounds(s);
+      return {x0,y0,x1,y1,height:s.trunkHeight??2,kind:'prop',...(s.trunkHeight?{trunk:s}:{})};
+    });
+    return [...walls,...props];
+  }
   navigationGrid(){return this.navigation||(this.navigation={width:this.width,height:this.height,nodes:sparseStore(16384),walks:sparseStore(131072),standIns:new Map()});}
   reveal(state,unit){
     if(state.fogAt&&Math.hypot(unit.x-state.fogAt.x,unit.y-state.fogAt.y)<.75)return;
@@ -180,6 +239,6 @@ export class TownWorld{
   }
   wallPanelsFor(window){const bounds=[window.x-.5,window.y-.5,window.x+window.w-.5,window.y+window.h-.5],panels=[];for(const {run,key}of this.wallsFor(bounds,{draw:true}))for(const p of wallPanels(run)){const hx=(Math.abs(Math.cos(p.yaw))*p.size[0]+Math.abs(Math.sin(p.yaw))*p.size[2])/2,hy=(Math.abs(Math.sin(p.yaw))*p.size[0]+Math.abs(Math.cos(p.yaw))*p.size[2])/2;if(intersect(bounds,[p.center[0]-hx,p.center[2]-hy,p.center[0]+hx,p.center[2]+hy]))panels.push({...p,id:key+':'+p.id});}return panels;}
   roofsFor(block){const result=[];for(const packet of this.cache.values())result.push(...packet.roofs.get(block.id)||[]);return result;}
-  plantsFor(bounds){const result=[];for(const packet of this.cache.values())for(const p of packet.plants)if(intersect(bounds,[p.x-2,p.y-2,p.x+2,p.y+2]))result.push(p);return result;}
+  plantsFor(bounds){const result=[];for(const packet of this.cache.values())result.push(...packet.plants.query(bounds));return result;}
   dispose(){if(this.disposed)return;this.disposed=true;for(const controller of this.inFlight.values())controller.abort();this.inFlight.clear();this.cache.clear();this.queue=[];for(const fn of this.listeners)fn();this.listeners.clear();this.navigation=null;this.artIndex=new SpatialIndex();this.closedBuildings=new SpatialIndex();this.state=null;}
 }

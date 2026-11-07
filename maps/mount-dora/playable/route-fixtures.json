@@ -1,6 +1,6 @@
 {
   "schema": "mount-dora-route-evidence/1",
-  "sourceProjectSHA256": "3a9e07d74dc6c7bbe5dbf8a396435b747f55c6103a3dfd94977cad90c0dc06a1",
+  "sourceProjectSHA256": "2940186491188524059f91746e6d3e94bc267e2a32c7be925a1fdcdf0c1b240e",
   "sourceDigest": "2b742d1768425de6a41a60818a0d2fd3a72b71f1969de94a50ff9041ce216193",
   "coordinateFrame": "town east/south metres; game = town - (0.5,0.5)",
   "bounds": [
@@ -17,7 +17,7 @@
     "sha256": "6d01eb4b49d6ba20ae71e4bb2cab095c80e63be5d14b6ff43f509a9cfc76633d"
   },
   "scope": "Offline outdoor source-terrain/reference-wall evidence. Final production art solids and streaming behavior require actual runtime tests.",
-  "terrainPolicy": "Water and closed building floor masks excluded; source vegetation anchors conservatively reserved. Existing Nautilus wall query checks 0.23m radius at 0.8m height.",
+  "terrainPolicy": "Water and closed building floor masks excluded; solid tree cells conservatively reserved. Existing Nautilus wall query checks 0.23m radius at 0.8m height.",
   "spawn": {
     "name": "Donnelly Park west approach",
     "townPoint": [
@@ -25,20 +25,20 @@
       500.5
     ]
   },
-  "reachableOutdoorCells": 1683341,
+  "reachableOutdoorCells": 1671981,
   "reachedLandSectors": 39,
   "sectors": [
     {
       "id": "A01",
-      "reachedOutdoorCells": 50043
+      "reachedOutdoorCells": 49605
     },
     {
       "id": "B01",
-      "reachedOutdoorCells": 48363
+      "reachedOutdoorCells": 48022
     },
     {
       "id": "C01",
-      "reachedOutdoorCells": 48404
+      "reachedOutdoorCells": 48398
     },
     {
       "id": "D01",
@@ -54,15 +54,15 @@
     },
     {
       "id": "A02",
-      "reachedOutdoorCells": 43340
+      "reachedOutdoorCells": 43091
     },
     {
       "id": "B02",
-      "reachedOutdoorCells": 46287
+      "reachedOutdoorCells": 46076
     },
     {
       "id": "C02",
-      "reachedOutdoorCells": 49039
+      "reachedOutdoorCells": 49023
     },
     {
       "id": "D02",
@@ -70,35 +70,35 @@
     },
     {
       "id": "E02",
-      "reachedOutdoorCells": 43209
+      "reachedOutdoorCells": 43147
     },
     {
       "id": "F02",
-      "reachedOutdoorCells": 50574
+      "reachedOutdoorCells": 50347
     },
     {
       "id": "A03",
-      "reachedOutdoorCells": 20960
+      "reachedOutdoorCells": 20941
     },
     {
       "id": "B03",
-      "reachedOutdoorCells": 40750
+      "reachedOutdoorCells": 40761
     },
     {
       "id": "C03",
-      "reachedOutdoorCells": 46136
+      "reachedOutdoorCells": 46094
     },
     {
       "id": "D03",
-      "reachedOutdoorCells": 49761
+      "reachedOutdoorCells": 49498
     },
     {
       "id": "E03",
-      "reachedOutdoorCells": 48745
+      "reachedOutdoorCells": 48420
     },
     {
       "id": "F03",
-      "reachedOutdoorCells": 50538
+      "reachedOutdoorCells": 50145
     },
     {
       "id": "A04",
@@ -106,23 +106,23 @@
     },
     {
       "id": "B04",
-      "reachedOutdoorCells": 47983
+      "reachedOutdoorCells": 46977
     },
     {
       "id": "C04",
-      "reachedOutdoorCells": 51100
+      "reachedOutdoorCells": 50887
     },
     {
       "id": "D04",
-      "reachedOutdoorCells": 50046
+      "reachedOutdoorCells": 49490
     },
     {
       "id": "E04",
-      "reachedOutdoorCells": 51865
+      "reachedOutdoorCells": 51421
     },
     {
       "id": "F04",
-      "reachedOutdoorCells": 51635
+      "reachedOutdoorCells": 51327
     },
     {
       "id": "A05",
@@ -130,23 +130,23 @@
     },
     {
       "id": "B05",
-      "reachedOutdoorCells": 9575
+      "reachedOutdoorCells": 9201
     },
     {
       "id": "C05",
-      "reachedOutdoorCells": 30384
+      "reachedOutdoorCells": 30046
     },
     {
       "id": "D05",
-      "reachedOutdoorCells": 49272
+      "reachedOutdoorCells": 48815
     },
     {
       "id": "E05",
-      "reachedOutdoorCells": 50254
+      "reachedOutdoorCells": 49708
     },
     {
       "id": "F05",
-      "reachedOutdoorCells": 45701
+      "reachedOutdoorCells": 45447
     },
     {
       "id": "A06",
@@ -154,23 +154,23 @@
     },
     {
       "id": "B06",
-      "reachedOutdoorCells": 7363
+      "reachedOutdoorCells": 7207
     },
     {
       "id": "C06",
-      "reachedOutdoorCells": 30228
+      "reachedOutdoorCells": 29921
     },
     {
       "id": "D06",
-      "reachedOutdoorCells": 50457
+      "reachedOutdoorCells": 49899
     },
     {
       "id": "E06",
-      "reachedOutdoorCells": 51026
+      "reachedOutdoorCells": 50638
     },
     {
       "id": "F06",
-      "reachedOutdoorCells": 50553
+      "reachedOutdoorCells": 50324
     },
     {
       "id": "A07",
@@ -178,23 +178,23 @@
     },
     {
       "id": "B07",
-      "reachedOutdoorCells": 22293
+      "reachedOutdoorCells": 21646
     },
     {
       "id": "C07",
-      "reachedOutdoorCells": 34980
+      "reachedOutdoorCells": 34183
     },
     {
       "id": "D07",
-      "reachedOutdoorCells": 48119
+      "reachedOutdoorCells": 47469
     },
     {
       "id": "E07",
-      "reachedOutdoorCells": 53687
+      "reachedOutdoorCells": 53481
     },
     {
       "id": "F07",
-      "reachedOutdoorCells": 56669
+      "reachedOutdoorCells": 56324
     }
   ],
   "routes": [
@@ -283,7 +283,7 @@
         1168.5
       ],
       "adjustmentM": 0,
-      "metres": 905,
+      "metres": 907,
       "turnPoints": [
         [
           459.5,
@@ -495,6 +495,14 @@
         ],
         [
           564.5,
+          1164.5
+        ],
+        [
+          563.5,
+          1164.5
+        ],
+        [
+          563.5,
           1166.5
         ],
         [
@@ -504,10 +512,26 @@
         [
           562.5,
           1167.5
+        ],
+        [
+          542.5,
+          1167.5
+        ],
+        [
+          542.5,
+          1168.5
+        ],
+        [
+          523.5,
+          1168.5
+        ],
+        [
+          523.5,
+          1169.5
         ],
         [
           504.5,
-          1167.5
+          1169.5
         ],
         [
           504.5,
@@ -573,8 +597,16 @@
           558.5
         ],
         [
-          649.5,
+          647.5,
           558.5
+        ],
+        [
+          647.5,
+          629.5
+        ],
+        [
+          649.5,
+          629.5
         ],
         [
           649.5,
@@ -696,16 +728,24 @@
           517.5
         ],
         [
-          626.5,
+          625.5,
           517.5
         ],
         [
+          625.5,
+          1159.5
+        ],
+        [
           626.5,
-          968.5
+          1159.5
+        ],
+        [
+          626.5,
+          1193.5
         ],
         [
           627.5,
-          968.5
+          1193.5
         ],
         [
           627.5,
@@ -1305,8 +1345,16 @@
           505.5
         ],
         [
-          481.5,
+          480.5,
           505.5
+        ],
+        [
+          480.5,
+          519.5
+        ],
+        [
+          481.5,
+          519.5
         ],
         [
           481.5,

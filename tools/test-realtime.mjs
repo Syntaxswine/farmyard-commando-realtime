@@ -31,6 +31,7 @@ async function close(){
  fs.writeFileSync(path.join(out,'helper-cleanup.json'),JSON.stringify(report.cleanup,null,2)+'\n');save();
 }
 const snapshot=page=>page.evaluate(async()=>{const url=document.querySelector('script[src*="app.js"]').src;return (await import(url)).inspectRealtime();});
+const townSnapshot=page=>page.evaluate(async()=>{const url=document.querySelector('script[src*="app.js"]').src;return (await import(url)).inspectMountDora();});
 const project=(page,point)=>page.evaluate(async point=>{const url=document.querySelector('script[src*="app.js"]').src;return (await import(url)).projectRealtimePoint(point);},point);
 async function wait(page,predicate,label,timeout=20000,read=snapshot){const end=Date.now()+timeout;let last;while(Date.now()<end){last=await read(page);if(predicate(last))return last;if(last.status==='lost')throw Error('Encounter lost while '+label+': '+JSON.stringify(last));await page.waitForTimeout(100);}throw Error(label+': '+JSON.stringify(last));}
 const audioBytes=id=>fs.statSync(path.join(site,'assets/audio/weapon-sfx',id+'.wav')).size;
@@ -58,6 +59,14 @@ async function pointClick(page,point){
 }
 async function moveTo(page,point){await pointClick(page,{...point,h:0});return wait(page,s=>Math.hypot(s.player.x-point.x,s.player.y-point.y)<.4,'walk to '+JSON.stringify(point),25000);}
 async function screenshot(page,name){await page.screenshot({path:path.join(out,name+'.png'),fullPage:true});}
+async function resumeTownAt(page,point){
+  await page.locator('#menu').click();await page.reload();
+  await page.evaluate(point=>{
+    const key='farmyard-realtime:farmyard-mount-dora-tour-v1',save=JSON.parse(localStorage.getItem(key));
+    Object.assign(save.player,point);localStorage.setItem(key,JSON.stringify(save));
+  },point);
+  await page.locator('#resume').click();
+}
 function capture(page,name){const log={name,errors:[],requests:[]};report.pages.push(log);page.on('pageerror',e=>log.errors.push(e.stack||String(e)));page.on('response',r=>{if(r.status()>=400)log.requests.push({url:r.url(),status:r.status()});});return log;}
 try{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));port=server.address().port;
@@ -70,7 +79,10 @@ try{
   await context.addInitScript(installNativeProbe);await page.goto(`http://127.0.0.1:${port}/game.html?activity=mount-dora`);
   assert.equal(await page.locator('#operation-select').inputValue(),'mount-dora');await page.locator('#deploy').click();
   const start=await wait(page,s=>s.ready,'Mount Dora renderer',90000);
-  assert.equal(start.guards.length,39);assert.equal(start.contacts.length,0);
+  assert.equal(start.guards.length,42);assert.equal(start.contacts.length,0);
+  assert.deepEqual(new Set(start.guards.map(g=>g.weapon)),new Set(['pistol','smg','rifle','shotgun']));
+  assert(start.guards.every(g=>g.maxHp===Math.round(start.player.hp/2)&&g.firearms===Math.round(start.player.stats.firearms/2)));
+  assert(start.guards.some(g=>g.patrolPoints===2)&&start.guards.some(g=>g.patrolPoints>2));
   const layout=await page.evaluate(async()=>{
     const app=await import(document.querySelector('script[src*="app.js"]').src),town=app.inspectMountDora(),p=town.player;
     const center=app.projectRealtimePoint(p),east=app.projectRealtimePoint({...p,x:p.x+3}),north=app.projectRealtimePoint({...p,y:p.y-3});
@@ -78,17 +90,22 @@ try{
   });
   assert(layout.plants>0);assert(layout.east.x>layout.center.x&&Math.abs(layout.east.y-layout.center.y)<.001);
   assert(layout.north.y<layout.center.y&&Math.abs(layout.north.x-layout.center.x)<.001);
-  mark('Mount Dora loads AFT plants, all land sentries and a north-up field camera',{plants:layout.plants,guards:start.guards.length});
-  // Resume an ordinary checkpoint at a clear B03 approach. Guard data,
-  // detection, combat and save/resume all use the deployed town and game.
-  const saveKey='farmyard-realtime:farmyard-mount-dora-tour-v1',sentry=start.guards.find(g=>g.id===14);
+  mark('Mount Dora loads AFT plants, mixed half-strength sentries and a north-up field camera',{plants:layout.plants,guards:start.guards.length});
   await page.locator('#menu').click();
-  await page.reload();
-  await page.evaluate(key=>{
-    const save=JSON.parse(localStorage.getItem(key));Object.assign(save.player,{x:356,y:605});
-    localStorage.setItem(key,JSON.stringify(save));
-  },saveKey);
-  await page.locator('#resume').click();
+  await page.getByRole('button',{name:'Visit landmark',exact:true}).click();
+  await page.getByRole('button',{name:'Palm Island boardwalk',exact:true}).click();
+  const forest=await wait(page,t=>t.ready&&!t.paused&&t.player.ground==='bridge'&&t.render?.plantModels>100,'Mount Dora woodland brush and boardwalk',90000,townSnapshot);
+  assert(forest.render.plantBatches>0&&forest.render.plantBatches<forest.render.plantModels);
+  assert(forest.actor.visible);assert.equal(forest.memory.shaderFailures,0);
+  await screenshot(page,'mount-dora-woods');mark('Mount Dora streams dense batched forest around the real boardwalk',{plants:forest.render.plantModels,batches:forest.render.plantBatches});
+  // Normal checkpoints supply clear approaches to the authored street patrol
+  // and B03 post. The game loads and advances the actual map and roster.
+  const patrol=start.guards.find(g=>g.id===2);
+  await resumeTownAt(page,{x:305,y:126});
+  await wait(page,s=>s.ready&&s.guards.some(g=>g.id===patrol.id&&!g.alert&&Math.hypot(g.x-patrol.x,g.y-patrol.y)>2),'Mount Dora sentry walks its sidewalk patrol',30000);
+  mark('Mount Dora runs the authored sidewalk patrol in the browser');
+  const sentry=start.guards.find(g=>g.id===14);
+  await resumeTownAt(page,{x:356,y:605});
   await wait(page,s=>s.ready&&s.guards.find(g=>g.id===sentry.id).ammo.pistol<sentry.ammo.pistol,'Mount Dora sentry returns fire',30000);
   await page.locator('#end-turn').click();
   const won=await wait(page,s=>s.kills===1&&s.objects.some(o=>o.id==='body:'+sentry.id),'Mount Dora Fire at Will defeats the sentry',25000);

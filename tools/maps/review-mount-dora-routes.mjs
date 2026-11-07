@@ -31,9 +31,9 @@ for(const sector of project.sectors){
   open[i]=terrain[i]!==1&&terrain[i]!==2?1:0;
  }
  for(const run of map.wallRuns?.segments||[])walls.push({...run,a:[run.a[0]+ox,run.a[1]+oy],b:[run.b[0]+ox,run.b[1]+oy]});
- for(const prop of map.props||[])props.push({x:ox+prop.x,y:oy+prop.y,kind:prop.kind});
+ for(const prop of map.props||[])if(prop.kind.startsWith('tree-'))props.push({x:ox+prop.x,y:oy+prop.y});
 }
-// Conservatively reserve each source vegetation anchor. The final runtime's
+// Conservatively reserve each tree trunk cell. The final runtime's
 // exact physical parts and production landmark solids must still be checked.
 for(const prop of props)open[prop.y*width+prop.x]=0;
 for(const run of walls){
@@ -116,9 +116,11 @@ for(const [x,y]of cornerTown)assert(parent[Math.floor(y)*width+Math.floor(x)],'D
 const nativeWalls={wallRuns:{version:1,segments:walls}};
 const game=p=>({x:p[0]-.5,y:p[1]-.5,h:.8});
 for(let i=1;i<cornerTown.length;i++)assert(!wallRunsIntersect(nativeWalls,game(cornerTown[i-1]),game(cornerTown[i]),{radius}));
-for(const sector of project.sectors)if(sector.guard){
- const x=sector.origin.x+sector.guard.x,y=sector.origin.y+sector.guard.y;
- assert(parent[y*width+x],sector.id+' sentry post must be reachable from town.');
+for(const sector of project.sectors)for(const guard of sector.guards){
+ for(const point of [guard,...guard.patrol||[]]){
+  const x=sector.origin.x+point.x,y=sector.origin.y+point.y;
+  assert(parent[y*width+x],sector.id+' sentry '+guard.id+' patrol must be reachable from town.');
+ }
 }
 assert(!wallRunsIntersect(nativeWalls,game([460.5,508.5]),game([488.5,508.5]),{radius}));
 for(let x=460;x<=488;x++)assert(open[508*width+x],'Clear source approach cannot cross blocked terrain or a vegetation anchor.');
@@ -126,7 +128,7 @@ assert(wallRunsIntersect(nativeWalls,game([480.5,508.5]),game([480.5,500.5]),{ra
 const output={schema:'mount-dora-route-evidence/1',sourceProjectSHA256:hash(fs.readFileSync(path.join(town,'project.json'))),sourceDigest:project.generation.sourceDigest,
  coordinateFrame:'town east/south metres; game = town - (0.5,0.5)',bounds:[0,0,width,height],actorRadiusM:radius,wallQuerySource:provenance,
  scope:'Offline outdoor source-terrain/reference-wall evidence. Final production art solids and streaming behavior require actual runtime tests.',
- terrainPolicy:'Water and closed building floor masks excluded; source vegetation anchors conservatively reserved. Existing Nautilus wall query checks 0.23m radius at 0.8m height.',
+ terrainPolicy:'Water and closed building floor masks excluded; solid tree cells conservatively reserved. Existing Nautilus wall query checks 0.23m radius at 0.8m height.',
  spawn:{name:'Donnelly Park west approach',townPoint:spawn.town},reachableOutdoorCells:tail,reachedLandSectors:bySector.filter(s=>s.reachedOutdoorCells>0).length,
  sectors:bySector,routes,seamSamples,
  boardwalkLanes:features.filter(f=>['osm-way-548471563','osm-way-688219167'].includes(f.id)).map(f=>({sourceId:f.id,townPoints:f.geometry.coordinates,policy:'Follow the mapped centre line when validating production rails; source-only grid paths may touch a new side rail.'})),

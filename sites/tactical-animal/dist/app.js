@@ -883,7 +883,9 @@ export function inspectRealtime(){
   return {active,paused:paused&&!manualTrigger,ready:!!view&&!view.pending?.size&&!view.failed?.size&&$('loading').hidden,missionId:state.solo.missionId,phase:state.phase,status:state.solo.status,elapsed:state.elapsed,queueLength:state.queue.length,...Core.realtimeStatus(state),
     lastDischarge:view?.lastDischarge??null,weaponPose:view?.playerWeaponPose??null,
     player:{x:hero(state).x,y:hero(state).y,hp:hero(state).hp,stance:hero(state).stance,sneaking:hero(state).sneaking,distance:state.solo.distance,ammo:{...hero(state).ammo},stats:{...hero(state).stats}},
-    contacts:Core.visibleOpponents(state).map(v=>({id:v.id,name:v.name,hp:v.hp,x:v.x,y:v.y})),guards:state.units.filter(v=>v.team==='guard').map(v=>({id:v.id,x:v.x,y:v.y,hp:v.hp,alert:v.alert,ammo:{...v.ammo},reload:state.realtime.actors[v.id]?.reload,projection:view?.projectWorldPoint?.({...v,h:.9})})),
+    contacts:Core.visibleOpponents(state).map(v=>({id:v.id,name:v.name,hp:v.hp,x:v.x,y:v.y})),
+    guards:state.units.filter(v=>v.team==='guard').map(v=>({id:v.id,x:v.x,y:v.y,hp:v.hp,maxHp:v.maxHp,weapon:v.weapon,firearms:v.stats.firearms,alert:v.alert,
+      patrolPoints:v.patrol?.length||0,patrolIndex:v.patrolIndex,moving:v.isMoving,ammo:{...v.ammo},reload:state.realtime.actors[v.id]?.reload,projection:view?.projectWorldPoint?.({...v,h:.9})})),
     objects:Core.interactionObjects(state).map(o=>({id:o.id,kind:o.kind,open:o.open,searched:o.searched,x:o.x,y:o.y})),shaderFailures:view?.renderer?.info.programs.filter(p=>p.diagnostics?.runnable===false).length??0};
 }
 export function projectRealtimePoint(point){return view?.projectWorldPoint?.(point)||null;}

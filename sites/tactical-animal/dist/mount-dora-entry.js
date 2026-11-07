@@ -23,6 +23,26 @@ async function readBytes(fetcher,url,signal,limit){
   const response=await fetcher(url,{signal,cache:'no-cache'});if(!response.ok)throw Error('Could not load town data (HTTP '+response.status+').');
   const bytes=await response.arrayBuffer();if(bytes.byteLength>limit)throw Error('Town document exceeds its supported size.');return bytes;
 }
+function restoreGuard(state,guard,saved,rosterChanged){
+  const {name,patrol}=guard;
+  if(!rosterChanged){
+    if(saved.patrolIndex!==undefined&&saved.patrolIndex>=(patrol?.length??0))throw Error('Unsupported saved patrol waypoint.');
+    Object.assign(guard,structuredClone(saved),{name,patrol,isMoving:false});
+    return;
+  }
+  // Old posts can now lie inside walls or foliage. Preserve casualties and
+  // proportional injuries while placing the revised roster at its new posts.
+  const fresh={...guard};
+  const previous=structuredClone(saved);
+  if(saved.hp>0){
+    Object.assign(guard,previous,fresh,{hp:Math.max(1,Math.round(fresh.maxHp*saved.hp/saved.maxHp))});
+    if(guard.burningTurns)guard.ap=0;
+  }else{
+    Object.assign(guard,previous,{x:fresh.x,y:fresh.y,heading:fresh.heading,name,patrol,alert:false,lastKnown:null,isMoving:false});
+  }
+  delete guard.patrolIndex;delete guard.patrolWaitUntil;
+  if(state.realtime?.actors)delete state.realtime.actors[guard.id];
+}
 export async function loadTownTour({build,progress=null,signal,fetcher=globalThis.fetch,projectURL=new URL('./maps/mount-dora/project.json',import.meta.url),artModule,kitModule}={}){
   if(!validBuild(progress?.build||build))throw Error('Choose a valid animal and loadout.');
   const [projectBytes,art,kit]=await Promise.all([readBytes(fetcher,projectURL,signal,1_000_000),
@@ -67,7 +87,7 @@ export async function loadTownTour({build,progress=null,signal,fetcher=globalThi
         for(const saved of r.guards||[]){
           const guard=state.units.find(u=>u.id===saved.id&&u.team==='guard');
           if(!guard||saved.species!==guard.species||!Core.WEAPONS[saved.weapon]||saved.slots.some(kind=>!Core.WEAPONS[kind]))throw Error('Unsupported saved town guard.');
-          Object.assign(guard,structuredClone(saved),{name:guard.name,isMoving:false});
+          restoreGuard(state,guard,saved,!!world.guardRosterVersion&&r.guardRosterVersion!==world.guardRosterVersion);
         }
       }
       // Restore casualties through the normal body system before applying

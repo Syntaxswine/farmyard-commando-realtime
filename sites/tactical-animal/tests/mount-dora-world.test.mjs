@@ -3,19 +3,19 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createHash} from 'node:crypto';
 import {TownWorld,decodeTownSector,TOWN_LIMITS,solidDistance} from '../dist/mount-dora-world.js';
-import {createSoloGame,DEFAULT_BUILD,Core,hero,encodeSave} from '../dist/solo-game.js';
+import {createSoloGame,DEFAULT_BUILD,Core,hero,encodeSave,confirmedImpact,lineClear,projectileSegmentClear,tick} from '../dist/solo-game.js';
 import {blockWindow} from '../dist/world-grid.js';
 const base=new URL('../../../maps/mount-dora/',import.meta.url),project=JSON.parse(fs.readFileSync(new URL('project.json',base)));
 const fetcher=async url=>new Response(fs.readFileSync(url));
 const make=async options=>new TownWorld(project,{baseURL:base,fetcher,...options}).identify();
 test('walking adapter accepts all 42 released geographic files, including terrain-only water, without changing source',()=>{
   let walls=0,water=0,guards=0;
-  for(const sector of project.sectors){const bytes=fs.readFileSync(new URL(sector.file,base)),raw=JSON.parse(bytes),before=JSON.stringify(raw),p=decodeTownSector(raw,sector);assert.equal(JSON.stringify(raw),before);assert.equal(p.raw,raw);walls+=p.walls.records.length;guards+=raw.guards.length;assert.deepEqual(raw.guards,sector.guard?[sector.guard]:[]);if(!sector.nativeImport.ready){water++;assert(p.raw.terrain.every(r=>r.every(t=>t==='water')));}}
-  assert.equal(walls,6909);assert.equal(water,3);assert.equal(guards,39);
+  for(const sector of project.sectors){const bytes=fs.readFileSync(new URL(sector.file,base)),raw=JSON.parse(bytes),before=JSON.stringify(raw),p=decodeTownSector(raw,sector);assert.equal(JSON.stringify(raw),before);assert.equal(p.raw,raw);walls+=p.walls.records.length;guards+=raw.guards.length;assert.deepEqual(raw.guards,sector.guards);if(!sector.nativeImport.ready){water++;assert(p.raw.terrain.every(r=>r.every(t=>t==='water')));}}
+  assert.equal(walls,project.metrics.wallRuns);assert.equal(water,3);assert.equal(guards,42);
 });
 test('source-backed continuous movement crosses both axes and a four-sector corner without resetting state',async()=>{
   const w=await make();w.startPoint={x:479,y:479};try{await w.readyAt(w.startPoint);const s=createSoloGame(DEFAULT_BUILD,1947,'mount-dora',{tourWorld:w}),u=hero(s),pack=JSON.stringify(u.pack);
-    for(const [x,y]of [[480,479],[480,480],[479,480],[479,479]]){assert(w.walkSegment(u,{x,y}));assert(Math.abs(Core.travel(s,u,x-u.x,y-u.y)-1)<1e-6);assert(Math.abs(u.x-x)<1e-6);assert(Math.abs(u.y-y)<1e-6);assert.equal(s.phase,'explore');assert.equal(s.units.length,40);assert.equal(Core.nearbyInteractions(s).length,0);}
+    for(const [x,y]of [[480,479],[480,480],[479,480],[479,479]]){assert(w.walkSegment(u,{x,y}));assert(Math.abs(Core.travel(s,u,x-u.x,y-u.y)-1)<1e-6);assert(Math.abs(u.x-x)<1e-6);assert(Math.abs(u.y-y)<1e-6);assert.equal(s.phase,'explore');assert.equal(s.units.length,43);assert.equal(Core.nearbyInteractions(s).length,0);}
     assert(Math.abs(s.solo.distance-4)<1e-6);assert.equal(JSON.stringify(u.pack),pack);assert(encodeSave(s).length<65000);assert.equal(s.map.length,1680);assert.equal(s.map[0].length,1440);assert(!Array.isArray(s.map));assert.equal(s.map[0][0],null);
   }finally{w.dispose();}
 });
@@ -24,10 +24,32 @@ test('boundary-spanning art-centre source wall blocks a crossing but not the ope
 });
 test('angled native wall uses the exact local slab, not its broad-phase axis-aligned box; shared owners survive replacement',async()=>{
   const sector=project.sectors.find(s=>s.id==='C03'),raw=JSON.parse(fs.readFileSync(new URL(sector.file,base)));
-  raw.terrain=Array.from({length:240},()=>Array(240).fill('ground-grass'));raw.upper=[{},{}];raw.levels=3;raw.props=[];raw.mountDora.buildingIds=['open','closed'];
+  raw.terrain=Array.from({length:240},()=>Array(240).fill('ground-grass'));raw.upper=[{},{}];raw.levels=3;raw.props=[];delete raw.foliage;raw.mountDora.buildingIds=['open','closed'];
   raw.wallRuns={version:1,segments:[{id:'diagonal',a:[10,10],b:[20,20],z:0,stories:1,material:'brick',sourceWallId:'one-global-wall',sourceBuildingIds:['open','closed']}]};
   const w=await make();try{let p=decodeTownSector(raw,sector,new Set(['open']),new Set(['open']));w.cache.set(sector.id,p);assert(w.pointClear({x:492,y:498}));assert(!w.pointClear({x:495,y:495}));assert(p.walls.records[0].walk);assert(p.walls.records[0].draw);
     p=decodeTownSector(raw,sector,new Set(['open','closed']),new Set(['open','closed']));w.cache.set(sector.id,p);assert(w.pointClear({x:495,y:495}));assert(!p.walls.records[0].draw);
+  }finally{w.dispose();}
+});
+test('woodland trunks stop sight and shots while paths can use clear air above and beside them',async()=>{
+  const sector=project.sectors.find(s=>s.id==='C03'),raw=JSON.parse(fs.readFileSync(new URL(sector.file,base)));
+  raw.terrain=Array.from({length:240},()=>Array(240).fill('ground-grass'));
+  raw.upper=[{},{}];raw.levels=3;raw.props=[{x:20,y:20,z:0,kind:'tree-broadleaf'}];
+  raw.foliage={'22,20,0':[100,false,'woodland-v1']};delete raw.wallRuns;
+  const w=await make();w.startPoint={x:495,y:500};w.cache.set(sector.id,decodeTownSector(raw,sector));
+  try{
+    const s=Core.enableRealtime(createSoloGame({...DEFAULT_BUILD,primary:'rpg'},1947,'mount-dora',{tourWorld:w})),u=hero(s);
+    const start={x:u.x,y:u.y,h:1.1},end={x:505,y:500,h:1.1,ground:true},trunk={x:500,y:500};
+    assert(!w.pointClear(trunk));assert(w.pointClear({x:502,y:500}));
+    assert(!lineClear(s,start,end));assert(!projectileSegmentClear(s,start,end));
+    assert(lineClear(s,{...start,h:2.1},{...end,h:2.1}));
+    assert(projectileSegmentClear(s,{...start,h:2.1},{...end,h:2.1}));
+    const cornerA={x:499.5,y:500.875,h:1},cornerB={x:500.875,y:499.5,h:1};
+    assert(lineClear(s,cornerA,cornerB));assert(projectileSegmentClear(s,cornerA,cornerB));
+    const impact=confirmedImpact(s,u,end);
+    assert(impact.box.trunk);assert(Math.abs(impact.point.x-499.78)<1e-8);
+    assert(Core.attack(s,u,end));
+    for(let i=0;i<50&&u.ammo.rpg>0;i++)tick(s,.05);
+    assert.equal(u.ammo.rpg,0);assert(Math.abs(s.effect.sequence.find(shot=>shot.shooter===u.id).bx-499.78)<1e-8);
   }finally{w.dispose();}
 });
 test('water blocks walking while the source-supported Palm Island bridge remains reachable',async()=>{

@@ -111,7 +111,149 @@ import collections
 import itertools
 
 
-def author_buildings(buildings, source_walls, terrain, codebook, options):
+def _bounds(shapes):
+    points = [point for polygons in shapes.values() for poly in polygons for ring in poly for point in ring]
+    return [min(p[0] for p in points), min(p[1] for p in points),
+            max(p[0] for p in points), max(p[1] for p in points)]
+
+
+def _translate(shapes, dx, dy):
+    return {id: [[[[x+dx, y+dy] for x,y in ring] for ring in poly] for poly in polygons]
+            for id, polygons in shapes.items()}
+
+
+def _rows(coords):
+    rows = {}
+    for x,y in coords:
+        rows[y] = rows.get(y, 0) | (1 << x)
+    return rows
+
+
+def _trim(shapes, trims):
+    west, north, east, south = _bounds(shapes)
+    lo_x, lo_y, hi_x, hi_y = west+trims[0], north+trims[1], east-trims[2], south-trims[3]
+    result = {}
+    for id, polygons in shapes.items():
+        result[id] = []
+        for outer, *holes in polygons:
+            if any(not (lo_x < x < hi_x and lo_y < y < hi_y) for hole in holes for x,y in hole):
+                raise ValueError('Street frontage trim touches a courtyard')
+            clipped = simplify([[max(lo_x, min(hi_x, x)), max(lo_y, min(hi_y, y))] for x,y in outer])
+            if not valid_ring(clipped) or signed_area(clipped)*signed_area(outer) <= 0:
+                raise ValueError('Street frontage trim changes ring topology')
+            result[id].append([clipped, *holes])
+    return result
+
+
+def _fit_street_clearance(groups, street_corridor, protected, validate, by_id, options, width, depth):
+    if len(street_corridor) != width*depth:
+        raise ValueError('Street clearance mask dimensions differ from the terrain')
+    painted = _rows((i%width, i//width) for i, value in enumerate(street_corridor) if value)
+    reserved = {}
+    for y in range(depth):
+        row = painted.get(y-1, 0) | painted.get(y, 0) | painted.get(y+1, 0)
+        # Integer footprints need one extra tile next to angled raster edges.
+        # This also keeps native wall thickness and façade ornaments off the sidewalk.
+        reserved[y] = row | (row << 1) | (row >> 1)
+    immovable = _rows(protected)
+    occupied = _rows(cell for g in groups for floor in g['current']['cells'].values() for cell in floor)
+    offsets = sorted((dx*dx+dy*dy, dx, dy) for dx in range(-12, 13) for dy in range(-12, 13)
+                     if dx*dx+dy*dy <= 144)
+
+    for group in groups:
+        current = group['current']
+        old_rows = _rows(cell for floor in current['cells'].values() for cell in floor)
+        if not any(bits & reserved[y] for y,bits in old_rows.items()):
+            continue
+        if current['override']:
+            raise ValueError('Reviewed footprint needs a street clearance revision: '+','.join(group['ids']))
+        blocked = {y: reserved[y] | immovable.get(y, 0) | (occupied.get(y, 0) & ~old_rows.get(y, 0))
+                   for y in range(depth)}
+        ids, pairs = group['ids'], group['pairs']
+        variants = [current] + group['families']
+        old_x0,old_y0,old_x1,old_y1 = _bounds(current['shapes'])
+        best = None
+        score = math.inf
+
+        def try_shape(base, trims, turned=False):
+            nonlocal best, score
+            shape_cost = 4*sum(trims) + (9 if turned else 0)
+            if shape_cost >= score:
+                return
+            shapes, footprint = base['shapes'], base['cells']
+            if any(trims):
+                try:
+                    shapes = _trim(shapes, trims)
+                    footprint = validate(shapes, ids, pairs)
+                except ValueError:
+                    return
+            sample = _rows(cell for floor in footprint.values() for cell in floor)
+            x0,y0,x1,y1 = _bounds(shapes)
+            for distance,dx,dy in offsets:
+                total = distance+shape_cost
+                if total >= score:
+                    break
+                if (x0+dx < min(0, old_x0-2) or y0+dy < min(0, old_y0-2) or
+                    x1+dx > max(width, old_x1+2) or y1+dy > max(depth, old_y1+2)):
+                    continue
+                if x0+dx < 0 or y0+dy < 0 or x1+dx > width or y1+dy > depth or x0 < 0 or y0 < 0 or x1 > width or y1 > depth:
+                    # A published building may already extend beyond the town
+                    # crop. Sample its translated visible portion exactly.
+                    moved = _translate(shapes, dx, dy)
+                    trial = _rows(cell for polys in moved.values() for cell in cells(polys))
+                else:
+                    trial = {y+dy: bits<<dx if dx>=0 else bits>>-dx for y,bits in sample.items()}
+                if not trial or any(bits & blocked[y] for y,bits in trial.items()):
+                    continue
+                moved = _translate(shapes, dx, dy)
+                try:
+                    moved_cells = validate(moved, ids, pairs)
+                except ValueError:
+                    continue
+                if any(not moved_cells[id] and current['cells'][id] for id in ids):
+                    continue
+                best = {**base, 'shapes':moved, 'cells':moved_cells, 'dx':base['dx']+dx, 'dy':base['dy']+dy,
+                        'streetClearance':{'streetSetbackMetres':[dx,dy], 'frontageTrimMetres':list(trims),
+                                           'quarterTurn':turned}}
+                score = total
+                break
+
+        for base in variants:
+            try_shape(base, (0,0,0,0))
+        for amount in range(1, 5):
+            if 4*amount >= score:
+                break
+            for sides in itertools.combinations_with_replacement(range(4), amount):
+                trims = tuple(sides.count(side) for side in range(4))
+                for base in variants:
+                    try_shape(base, trims)
+        if best is None and len(ids)==1:
+            # A historic street line may cross a surveyed roof. Try the other
+            # cardinal orientation only when preserving the original axis
+            # cannot keep that shell in the surrounding block.
+            id = ids[0]
+            for phase in options['phaseOffsets']:
+                angle = current['angle']+math.pi/2
+                try:
+                    shapes = {id:rectify(by_id[id]['geometry']['coordinates'], phase, angle, group['centre'])[0]}
+                    rotated = {**current, 'shapes':shapes, 'cells':validate(shapes, ids, pairs),
+                               'angle':angle, 'phase':phase, 'dx':0, 'dy':0}
+                except ValueError:
+                    continue
+                for amount in range(5):
+                    for sides in itertools.combinations_with_replacement(range(4), amount):
+                        try_shape(rotated, tuple(sides.count(side) for side in range(4)), turned=True)
+        if best is None:
+            raise ValueError('No building fit clears both sidewalks: '+','.join(ids))
+        for y,bits in old_rows.items():
+            occupied[y] &= ~bits
+        for y,bits in _rows(cell for floor in best['cells'].values() for cell in floor).items():
+            occupied[y] = occupied.get(y, 0) | bits
+        group['current'] = best
+
+
+def author_buildings(buildings, source_walls, terrain, codebook, options, *,
+                     street_corridor=None, street_fit_terrain=None):
     if options.get('version') != 1 or options.get('gridMetres') != 1:
         raise ValueError('Unsupported building-grid authoring profile')
     by_id={f['id']:f for f in buildings}
@@ -187,7 +329,7 @@ def author_buildings(buildings, source_walls, terrain, codebook, options):
             best=current
             for base in group['families']:
                 for dx,dy in offsets:
-                    shapes={id:[[[[x+dx,y+dy] for x,y in r] for r in p] for p in ps] for id,ps in base['shapes'].items()}
+                    shapes=_translate(base['shapes'],dx,dy)
                     # Re-sample the translated polygons: moving an edge into the
                     # town must include cells previously outside the crop.
                     cs={id:cells(shape) for id,shape in shapes.items()}
@@ -203,6 +345,14 @@ def author_buildings(buildings, source_walls, terrain, codebook, options):
         if not changed:break
     unresolved=[{'ids':g['ids'],'violations':score(g,g['current'])[:3]} for g in groups if score(g,g['current'])[0]]
     if unresolved:raise ValueError('Grid layout intrudes on streets/water/neighbours: '+str(unresolved))
+    if street_corridor is not None:
+        if street_fit_terrain is not None:
+            if len(street_fit_terrain) != len(terrain):
+                raise ValueError('Street fit terrain dimensions differ from the source terrain')
+            water = codebook['water']
+            protected = {(i%width,i//width) for i, value in enumerate(street_fit_terrain)
+                         if value in protected_codes and (value != water or terrain[i] == water)}-source_cells
+        _fit_street_clearance(groups, street_corridor, protected, validate, by_id, options, width, len(terrain)//width)
     records=[]
     for group in groups:
         candidate=group['current']
@@ -212,7 +362,8 @@ def author_buildings(buildings, source_walls, terrain, codebook, options):
             original=by_id[id];old_bounds=original['bounds'];old_centre=[(old_bounds[i]+old_bounds[i+2])/2 for i in (0,1)];new_centre=[(b[i]+b[i+2])/2 for i in (0,1)]
             records.append({'id':id,'geometry':{'type':'MultiPolygon','coordinates':polygons},'bounds':b,'componentIds':group['ids'],
                 'derivation':{'method':'reviewed-grid-override' if candidate['override'] else 'shared-component-dominant-axis','dominantAxisDegrees':round(candidate['angle']*180/math.pi,9),'componentCentre':group['centre'],'phase':candidate['phase'],'translationMetres':[candidate['dx'],candidate['dy']],
-                    'note':overrides[id]['reason'] if candidate['override'] else 'Coherent cardinal lines and one-metre integer tile edges; geographic source retained.'},
+                    'note':overrides[id]['reason'] if candidate['override'] else 'Coherent cardinal lines and one-metre integer tile edges; geographic source retained.',
+                    **({'streetClearance':candidate['streetClearance']} if 'streetClearance' in candidate else {})},
                 'metrics':{'sourceAreaM2':area(original['geometry']['coordinates']),'authoredAreaM2':area(polygons),'centreShiftM':math.dist(old_centre,new_centre),'sourceFloorCells':len(originals[id]),'authoredFloorCells':len(candidate['cells'][id])}})
     records.sort(key=lambda r:r['id'])
     return {'kind':'mount-dora-authored-buildings','version':1,'gridMetres':1,'coordinatePolicy':'integer town structural edges; host game coordinates subtract0.5 exactly once','records':records,

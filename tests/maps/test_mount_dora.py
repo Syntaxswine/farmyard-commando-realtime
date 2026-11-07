@@ -252,19 +252,53 @@ class MountDoraGeneration(unittest.TestCase):
                     cardinal += a[0] == b[0] or a[1] == b[1]
         self.assertGreater(cardinal, .7 * segments)
 
+    def test_buildings_clear_the_full_road_and_sidewalk_ribbon(self):
+        roads = [f for f in self.features.values() if f.get("nativeRoad")]
+        corridor = BUILDER.street_corridor(roads, 1440, 1680)
+        for index, kind in enumerate(self.grid):
+            if kind == BUILDER.CODE["floor"]:
+                x, y = index % 1440, index // 1440
+                for yy in range(max(0, y - 1), min(1680, y + 2)):
+                    first, last = yy * 1440 + max(0, x - 1), yy * 1440 + min(1440, x + 2)
+                    self.assertFalse(any(corridor[first:last]), (x, y))
+
+    def test_native_trees_and_foliage_brush_stay_on_mapped_green_ground(self):
+        trees = 0
+        brush_cells = 0
+        for mapping in self.maps.values():
+            for prop in mapping["props"]:
+                trees += prop["kind"].startswith("tree-")
+                self.assertIn(mapping["terrain"][prop["y"]][prop["x"]], ("ground-grass", "woodland"))
+            for cell, brush in mapping.get("foliage", {}).items():
+                x, y, _ = map(int, cell.split(","))
+                self.assertIn(mapping["terrain"][y][x], ("ground-grass", "woodland"))
+                self.assertEqual(brush[2], "woodland-v1")
+                brush_cells += 1
+        self.assertGreaterEqual(trees, 8150)
+        self.assertEqual(trees, self.project["metrics"]["trees"])
+        self.assertGreater(brush_cells, 0)
+        self.assertEqual(brush_cells, self.project["metrics"]["foliageCells"])
+
     def test_preview_anchors_and_sentries_are_on_existing_outdoor_cells(self):
+        roster = []
         for sector in self.project["sectors"]:
             mapping = self.maps[sector["id"]]
-            post = sector["guard"]
-            self.assertEqual(mapping["guards"], [post] if post else [])
+            posts = sector["guards"]
+            self.assertEqual(mapping["guards"], posts)
             self.assertEqual(mapping["stairs"],[])
             self.assertEqual(mapping["climbs"],[])
             if not sector["nativeImport"]["ready"]:
-                self.assertIsNone(post)
+                self.assertFalse(posts)
                 continue
-            self.assertEqual(post["z"], 0)
-            self.assertNotIn(mapping["terrain"][post["y"]][post["x"]], ("water", "floor", "bridge"))
-            self.assertNotIn((post["x"], post["y"]), {(p["x"], p["y"]) for p in mapping["props"]})
+            self.assertTrue(posts)
+            roster.extend(posts)
+            tree_cells = {(p["x"], p["y"]) for p in mapping["props"] if p["kind"].startswith("tree-")}
+            for post in posts:
+                for point in [post, *post.get("patrol", [])]:
+                    x, y = point["x"], point["y"]
+                    self.assertEqual(point["z"], 0)
+                    self.assertNotIn(mapping["terrain"][y][x], ("water", "floor", "bridge"))
+                    self.assertNotIn((x, y), tree_cells)
             points = mapping["starts"] + mapping["exits"]
             self.assertEqual(len(mapping["starts"]),4)
             self.assertEqual(len(mapping["exits"]),1)
@@ -281,6 +315,11 @@ class MountDoraGeneration(unittest.TestCase):
                 self.assertNotIn(mapping["terrain"][y][x],("water","floor"))
                 self.assertFalse(any(abs(p["x"]-x)<=1 and abs(p["y"]-y)<=1 for p in mapping["props"]))
                 self.assertTrue(all(segment_distance([x,y],r["a"],r["b"]) > 1 for r in mapping.get("wallRuns",{}).get("segments",[])))
+        self.assertEqual(len({g["id"] for g in roster}), len(roster))
+        self.assertEqual(len(roster), 42)
+        self.assertEqual({g["weapon"] for g in roster}, {"pistol", "smg", "rifle", "shotgun"})
+        self.assertTrue(any(len(g.get("patrol", [])) == 2 for g in roster))
+        self.assertTrue(any(len(g.get("patrol", [])) > 2 for g in roster))
 
 
 class SurveyEvidence(unittest.TestCase):

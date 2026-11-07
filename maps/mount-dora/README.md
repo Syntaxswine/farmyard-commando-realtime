@@ -27,13 +27,16 @@ embedded in the game is not evidence that Nautilus wall-run extensions render.
 - Grid-aligned exterior walls, floors and upper masks. Eighty-four buildings
   cross sector boundaries; their source identities and wall geometry continue
   across the cuts without invented closing walls.
+  The playable fit reserves the entire street corridor and a tile for facade
+  clearance. Original outlines and each adjusted footprint are recorded.
 - Source-backed bridge and wooden boardwalk routes. Water is retained beneath
   these routes; park and vegetation fills do not manufacture land in the lake.
 - A common metre coordinate system, all 42 native JSON documents, neighbor
   references, source feature identities, raw input snapshots and reproducible
   generation records.
-- AFT broadleaf trees, shrubs and reeds dress mapped parks, woods, wetlands and
-  open ground in residential areas. Individual placements are seeded scenery.
+- AFT trees, shrubs and reeds dress mapped parks, woods, wetlands and open ground
+  in residential areas. The native woodland brush paints undergrowth in woods
+  and wetlands. Individual placements are seeded scenery.
 - Mapped sports pitches exclude procedural trees. Tennis and pickleball polygons
   use a declared existing asphalt ground proxy without invented court markings;
   overlapping source records are retained rather than asserted as a current count.
@@ -43,9 +46,9 @@ A07 contain only lake water. Their geographic files are complete, but the
 workshop refuses them because it requires four walkable squad starts and a
 travel marker. The authoring data does not add fake platforms to bypass that
 rule. The other sectors have five clearly identified authoring-validator
-markers on connected existing land for editor validation. Each of those 39
-sectors also has a separate sentry post that uses the game's normal combat and
-save systems.
+markers on connected existing land for editor validation. Forty-two sentries
+start across the 39 land sectors. They hold posts, walk a street back and forth,
+or follow a local circuit using the game's movement, combat and save systems.
 
 ## Scale, coverage and precision
 

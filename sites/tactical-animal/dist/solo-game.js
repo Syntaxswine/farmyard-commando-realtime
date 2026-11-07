@@ -2,6 +2,7 @@ import {createRealtimeRules,validateRealtime,awardRealtimeKill,shotSeconds,grena
 import {boundedElapsed,SIMULATION_STEP_SECONDS} from './frame-timing.js';
 import {TOUR_ID,getTourWorld,bindTourWorld,isTour} from './mount-dora-activity.js';
 import {encodeTourProgress} from './mount-dora-progress.js';
+import {trunkDistance,trunkSpan} from './trunk-geometry.js';
 import {WEAPONS,AIM_ZONES} from './aft/tactics/solo-weapon-data.js';
 import {initializeStats,weaponAccuracy,damageAfterResistance} from './aft/tactics/character-stats.js';
 import {QUICKPLAY_PRESETS} from './aft/tactics/quickplay-presets.js';
@@ -50,6 +51,18 @@ export function normalizeBuild(b){
 export function buildStats(b){const p=ANIMALS.find(a=>a.id===b.animal),u={team:'squad',name:p.name};initializeStats(u,p.stats);return u;}
 export function log(s,message){s.log.unshift(message);s.log=s.log.slice(0,35);s.revision++;}
 function makeUnit(id,team,name,species,weapon,x,y,heading,stats){const u={id,team,name,species,weapon,x,y,z:0,heading,stance:'standing',running:false,sneaking:false,travelled:0,isMoving:false,alert:false,lastKnown:null,alertAge:0,slots:[weapon],pack:[],ammo:{[weapon]:WEAPONS[weapon].mag},ammoPouch:{[weapon]:WEAPONS[weapon].mag*3}};initializeStats(u,stats);return u;}
+function makeGuard(post,id,stats,townPlayer){
+  const guard=makeUnit(id,'guard',post.name||post.character?.displayName||'Guard '+id,post.species,post.weapon,post.x,post.y,post.heading??0,stats);
+  if(townPlayer){
+    // The usual 50-point base pools would leave a half-strength guard
+    // with most of the player's health and stamina.
+    guard.hp=guard.maxHp=Math.round(townPlayer.maxHp/2);
+    guard.stamina=guard.maxStamina=Math.round(townPlayer.maxStamina/2);
+    guard.ap=guard.maxAp=Math.round(townPlayer.maxAp/2);
+    if(post.patrol?.length)guard.patrol=post.patrol;
+  }
+  return guard;
+}
 function mapMetadata(state,map){
   // Mission scenery belongs to the full world, regardless of render residency.
   for(const name of ['props','obstacles','worldBounds','groundPalette','windows']){
@@ -66,10 +79,10 @@ export function createSoloGame(build=DEFAULT_BUILD,seed=1947,missionId=DEFAULT_M
   const u=makeUnit(0,'squad',p.name,p.species,build.primary,spawn.x,spawn.y,spawn.heading??270,p.stats);
   u.slots=[build.primary,build.secondary];const kinds=[...u.slots,...(build.utility==='grenade'?['grenade']:[])];
   u.ammo=Object.fromEntries(kinds.map(k=>[k,WEAPONS[k].mag]));u.pack=kinds.map(kind=>({type:'weapon',kind,rounds:u.ammo[kind],condition:100}));if(build.secondary==='pistol')u.ammoPouch.pistol=24;
-  const stats={strength:10,endurance:20,agility:22,firearms:35,perception:35,dexterity:35};
+  const stats=walkingWorld?.guardRosterVersion?Object.fromEntries(Object.entries(u.stats).map(([key,value])=>[key,Math.max(1,Math.round(value/2))])):{strength:10,endurance:20,agility:22,firearms:35,perception:35,dexterity:35};
   const posts=walkingWorld?.guardPosts??(authoredMap?authoredMap.guards||[]:mission.guards);
   if(authoredMap&&(posts.length>128||posts.some(g=>!g||!WEAPONS[g.weapon]||!['horse','goat','bull','cow','donkey','sheep','skunk','pig-foreman','pig-director','rabbit','dog','hen'].includes(g.species)||!insideWorld({map:m.terrain,worldBounds:m.worldBounds},g))))throw Error('Unsupported authored guard.');
-  const units=[u,...posts.map((g,i)=>makeUnit(walkingWorld?g.id:i+1,'guard',g.name||g.character?.displayName||'Guard '+(i+1),g.species,g.weapon,g.x,g.y,g.heading??0,stats))];
+  const units=[u,...posts.map((g,i)=>makeGuard(g,walkingWorld?g.id:i+1,stats,walkingWorld?.guardRosterVersion?u:null))];
   if(mission.fallen){const f=mission.fallen,fallen=makeUnit(units.length,'guard',f.name,f.species,f.weapon,f.x,f.y,f.heading,stats);fallen.hp=0;fallen.casualty='dead';units.push(fallen);}
   const s={map:m.terrain,edges:m.edges,units,interactables:missionInteractables({missionId:mission.id,layoutVersion:mission.layoutVersion??1}),phase:'explore',round:0,selected:0,visible:new Set(),seen:new Set(),detected:new Set(),log:[],seed,revision:0,queue:[],enemyIndex:1,enemyDelay:0,elapsed:0,solo:{version:2,missionId:mission.id,layoutVersion:mission.layoutVersion??1,build:{...build},objectives:{},inspected:[],ledger:false,status:'active',dressings:build.utility==='dressing'?2:0,distance:0,apDistance:0}};
   if(authoredMap){s.solo.authoredMap=structuredClone(authoredMap);s.interactables=(m.doors||[]).map(({interactive,...door})=>({...door}));}
@@ -131,14 +144,15 @@ const occupiesAir=box=>box.kind!=='prop';
 const STANDING_EYE=1.1,PRONE_EYE=.3;
 const eyeHeight=u=>u.stance==='prone'?PRONE_EYE:u.stance==='kneeling'?.75:STANDING_EYE;
 const bodyHeight=u=>u.stance==='prone'?.42:u.stance==='kneeling'?1.15:1.75;
-const pointBoxDistance=(p,b)=>Math.hypot(Math.max(b.x0-p.x,0,p.x-b.x1),Math.max(b.y0-p.y,0,p.y-b.y1));
+const pointBoxDistance=(p,b)=>b.trunk?trunkDistance(p,b.trunk):Math.hypot(Math.max(b.x0-p.x,0,p.x-b.x1),Math.max(b.y0-p.y,0,p.y-b.y1));
 function insideWorld(s,p,padding=0){const b=worldBounds(s);return Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>=b.x-.5+padding&&p.x<=b.x+b.w-.5-padding&&p.y>=b.y-.5+padding&&p.y<=b.y+b.h-.5-padding;}
 export function freePoint(s,p,ignoreId=null,{units=true,radius=RADIUS}={}){if(!insideWorld(s,p,radius))return false;const town=getTourWorld(s);if(town?!town.pointClear(p,radius):geometryNear(s,p,p,radius,'walk').some(b=>pointBoxDistance(p,b)<radius-EPS))return false;return !units||!s.units.some(u=>alive(u)&&u.id!==ignoreId&&distance(u,p)<RADIUS+radius-EPS);}
-function boxInterval(a,b,box){let lo=0,hi=1;for(const [k,min,max] of [['x',box.x0,box.x1],['y',box.y0,box.y1]]){const d=b[k]-a[k];if(Math.abs(d)<EPS){if(a[k]<min||a[k]>max)return null;continue;}const t0=(min-a[k])/d,t1=(max-a[k])/d;lo=Math.max(lo,Math.min(t0,t1));hi=Math.min(hi,Math.max(t0,t1));if(lo>hi)return null;}return [lo,hi];}
+function boxInterval(a,b,box){if(box.trunk)return trunkSpan(a,b,box.trunk);let lo=0,hi=1;for(const [k,min,max] of [['x',box.x0,box.x1],['y',box.y0,box.y1]]){const d=b[k]-a[k];if(Math.abs(d)<EPS){if(a[k]<min||a[k]>max)return null;continue;}const t0=(min-a[k])/d,t1=(max-a[k])/d;lo=Math.max(lo,Math.min(t0,t1));hi=Math.min(hi,Math.max(t0,t1));if(lo>hi)return null;}return [lo,hi];}
 function intersectsBox(a,b,box){const span=boxInterval(a,b,box);return !!span&&span[1]>EPS&&span[0]<1-EPS;}
 // The parameter span within [0,1] where a segment, rising linearly from height
 // za at a to zb at b, is inside both the box's footprint and its [z0, height].
 function airSpan(a,b,za,zb,box){
+  if(box.trunk)return trunkSpan(a,b,box.trunk,za,zb);
   const span=boxInterval(a,b,box);if(!span)return null;
   let [lo,hi]=span;const dz=zb-za,z0=box.z0??0;
   if(Math.abs(dz)<EPS){if(za<z0||za>box.height)return null;}
@@ -148,7 +162,7 @@ function airSpan(a,b,za,zb,box){
 // Only walls block standing or kneeling sight. Between two prone animals any
 // solid that crosses their eye line blocks it, at its own height.
 export function lineClear(s,a,b){
-  const town=getTourWorld(s);if(town)return town.lineClear(a,b);
+  const town=getTourWorld(s);if(town)return town.lineClear({...a,h:a.h??eyeHeight(a)},{...b,h:b.h??eyeHeight(b)});
   if(![a.x,a.y,b.x,b.y].every(Number.isFinite))return false;
   if(a.stance!=='prone'||b.stance!=='prone')return !geometryNear(s,a,b,0,'wall').some(box=>intersectsBox(a,b,box)&&(!box.windowPart||!!airSpan(a,b,a.h??eyeHeight(a),b.h??eyeHeight(b),box)));
   return !geometryNear(s,a,b,0,'air').some(box=>box.kind!=='glass'&&intersectsBox(a,b,box)&&(box.kind==='wall'&&!box.windowPart||!!airSpan(a,b,PRONE_EYE,PRONE_EYE,box)));
@@ -510,7 +524,7 @@ function attackNow(s,a,b,burst=false,byAI=false,zone='torso',reaction=false,aimL
     const fireBefore=s.fireAnimationSequence||0,windowBefore=s.windowSequence||0,event={shooter:a.id,target:b.id,ax:a.x,ay:a.y,ah:eyeHeight(a),bx:b.x,by:b.y,bh:shotHeight(b,zone),sourceVisible:a.team==='squad'||s.detected.has(a.id),incendiary:w.incendiary,hit:false,weapon,shot:round,explosions:[]};sequence.push(event);
     if(w.incendiary){event.flame=recordFlame(a,w.range,geometryNear(s,a,a,w.range,'flame'),s.visible);event.impacts=resolveFlame(s,a,event);event.hit=event.impacts.length>0;}
     else if(w.blast){
-      const impact=confirmedImpact(s,a,b,zone),origin=impact?.box?.windowPart?impact.point:b;event.bx=origin.x;event.by=origin.y;event.bh=origin.h??event.bh;
+      const impact=confirmedImpact(s,a,b,zone),origin=impact?.box?.windowPart||impact?.box?.trunk?impact.point:b;event.bx=origin.x;event.by=origin.y;event.bh=origin.h??event.bh;
       for(const victim of s.units.filter(alive))if(alive(victim)&&distance(victim,origin)<=w.blast&&lineClear(s,origin,victim)){if(!detonateImpact(s,a,victim,'torso',w,event))hurt(s,victim,Math.round(w.damage*Math.max(.2,1-distance(victim,origin)/(w.blast+1))));event.hit=true;}
       windowBlast(s,origin,w.blast);
     }else{
@@ -719,7 +733,7 @@ function guardActive(s,g){
   const town=getTourWorld(s);
   return !town||(distance(g,hero(s))<=72&&town.residentAt(g)&&(!g.lastKnown||town.residentAt(g.lastKnown)));
 }
-const realtimeRules=createRealtimeRules({hero,alive,distance,canSee,confirmedImpact,previewAttack,headingTo,flameAffects,previewFlame,fireFlame:(s,u,heading)=>fireFlame(s,u,heading,{keepMovement:true}),attack:(s,a,...args)=>damageAction(s,a,a.weapon,()=>attackNow(s,a,...args)),completeReload:(s,u)=>reloadNow(s,u,true),travel,movePlayer:realtimePlayerStep,approachPath,guardActive,refresh,log,fireRules});
+const realtimeRules=createRealtimeRules({hero,alive,distance,canSee,confirmedImpact,previewAttack,headingTo,flameAffects,previewFlame,fireFlame:(s,u,heading)=>fireFlame(s,u,heading,{keepMovement:true}),attack:(s,a,...args)=>damageAction(s,a,a.weapon,()=>attackNow(s,a,...args)),completeReload:(s,u)=>reloadNow(s,u,true),travel,movePlayer:realtimePlayerStep,approachPath,navigationPath,guardActive,refresh,log,fireRules});
 export const enableRealtime=s=>realtimeRules.enable(s);
 export const configureRealtime=(s,changes)=>realtimeRules.configure(s,changes);
 export const pinRealtimeTarget=(s,id)=>realtimeRules.pin(s,id);
