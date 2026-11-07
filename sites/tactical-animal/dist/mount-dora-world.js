@@ -225,14 +225,10 @@ export class TownWorld{
     return true;
   }
   brushDepth(a,b){
-    const bx=Math.round(b.x),by=Math.round(b.y),target=this.packetForCell(bx,by);
-    if(!target)return 0;
-    const origin=target.sector.origin;
-    if(!target.raw.foliage?.[(bx-origin.x)+','+(by-origin.y)+',0'])return 0;
     const bounds=[Math.min(a.x,b.x),Math.min(a.y,b.y),Math.max(a.x,b.x),Math.max(a.y,b.y)];
     let depth=0;
-    // AFT integrates density in native metre cells. Sum disjoint sector
-    // contributions so streaming boundaries do not interrupt concealment.
+    // AFT integrates density along the whole sight line, including brush in
+    // front of an unpainted trunk tile. Each sector contributes its own cells.
     for(const packet of this.cache.values()){
       const {x,y}=packet.sector.origin;
       if(intersect(bounds,[x-.5,y-.5,x+239.5,y+239.5])){

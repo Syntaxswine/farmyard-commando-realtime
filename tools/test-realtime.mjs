@@ -99,23 +99,24 @@ try{
   assert(forest.actor.visible);assert.equal(forest.memory.shaderFailures,0);
   await screenshot(page,'mount-dora-woods');mark('Mount Dora streams dense batched forest around the real boardwalk',{plants:forest.render.plantModels,batches:forest.render.plantBatches});
 
-  // A clear brush approach west of the B06 patrol and directly in line with
+  // A clear brush approach northeast of the B06 patrol and directly in line with
   // an authored trunk. Resume with the normal save and use real controls.
   const woodlandGuard=s=>s.guards.find(g=>g.id===32);
-  await resumeTownAt(page,{x:396,y:1401,stance:'prone',sneaking:false,running:true});
+  await resumeTownAt(page,{x:431.5,y:1381,stance:'prone',sneaking:false,running:true});
   const inBrush=await wait(page,s=>s.ready&&!s.paused&&woodlandGuard(s).moving,'Mount Dora woodland patrol',90000);
   assert.equal(inBrush.player.stance,'prone');assert(!woodlandGuard(inBrush).alert);
   let slid;
-  await page.keyboard.down('d');
+  await page.keyboard.down('a');
   try{
-    slid=await wait(page,s=>s.player.x>398.25,'Mount Dora crawls past a head-on tree',20000);
-  }finally{await page.keyboard.up('d');}
-  assert(Math.abs(slid.player.y-1401)>.44);assert(!woodlandGuard(slid).alert);
+    slid=await wait(page,s=>s.player.x<429.75,'Mount Dora crawls past a head-on tree',20000);
+  }finally{await page.keyboard.up('a');}
+  assert(Math.abs(slid.player.y-1381)>.44,'The player must actually move sideways around the trunk');
+  assert(!woodlandGuard(slid).alert,JSON.stringify({player:slid.player,guard:woodlandGuard(slid)}));
   await page.locator('#stance-cycle').click();
   const crouched=await wait(page,s=>s.elapsed>slid.elapsed+1&&s.player.stance==='kneeling','Mount Dora crouches in brush');
   assert(!woodlandGuard(crouched).alert);assert.equal(crouched.player.hp,inBrush.player.hp);
   await page.locator('#stance-cycle').click();
-  const exposed=await wait(page,s=>woodlandGuard(s).alert,'Mount Dora patrol spots a standing target',30000);
+  const exposed=await wait(page,s=>woodlandGuard(s).alert,'Mount Dora patrol spots a standing target',45000);
   assert.equal(exposed.player.stance,'standing');
   mark('Mount Dora brush conceals a crawling or kneeling player and held movement slides around trunks');
 

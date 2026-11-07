@@ -86,7 +86,8 @@ test('painted brush across a sector seam conceals low stances without blocking s
     assert(lineClear(s,guard,u));
     assert(projectileSegmentClear(s,{...guard,h:1.1},{...u,h:.75}));
     assert(Core.canSee(s,{...guard,x:479.1},u),'a guard can spot someone up close');
-    assert(Core.canSee(s,guard,{...u,x:483}),'open ground loses the brush benefit');
+    assert(!Core.canSee(s,guard,{...u,x:483}),'brush still conceals an animal just beyond the paint');
+    assert(Core.canSee(s,{...guard,y:502},{...u,y:502}),'a wholly open sight line has no brush benefit');
   }finally{w.dispose();}
 });
 test('water blocks walking while the source-supported Palm Island bridge remains reachable',async()=>{
