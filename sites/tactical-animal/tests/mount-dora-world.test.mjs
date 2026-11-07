@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createHash} from 'node:crypto';
 import {TownWorld,decodeTownSector,TOWN_LIMITS,solidDistance} from '../dist/mount-dora-world.js';
-import {createSoloGame,DEFAULT_BUILD,Core,hero,encodeSave,confirmedImpact,lineClear,projectileSegmentClear,tick} from '../dist/solo-game.js';
+import {createSoloGame,DEFAULT_BUILD,Core,hero,encodeSave,confirmedImpact,freePoint,lineClear,projectileSegmentClear,tick} from '../dist/solo-game.js';
 import {blockWindow} from '../dist/world-grid.js';
 const base=new URL('../../../maps/mount-dora/',import.meta.url),project=JSON.parse(fs.readFileSync(new URL('project.json',base)));
 const fetcher=async url=>new Response(fs.readFileSync(url));
@@ -30,7 +30,7 @@ test('angled native wall uses the exact local slab, not its broad-phase axis-ali
     p=decodeTownSector(raw,sector,new Set(['open','closed']),new Set(['open','closed']));w.cache.set(sector.id,p);assert(w.pointClear({x:495,y:495}));assert(!p.walls.records[0].draw);
   }finally{w.dispose();}
 });
-test('woodland trunks stop sight and shots while paths can use clear air above and beside them',async()=>{
+test('woodland trunks still stop sight and shots while walking slides off their sides',async()=>{
   const sector=project.sectors.find(s=>s.id==='C03'),raw=JSON.parse(fs.readFileSync(new URL(sector.file,base)));
   raw.terrain=Array.from({length:240},()=>Array(240).fill('ground-grass'));
   raw.upper=[{},{}];raw.levels=3;raw.props=[{x:20,y:20,z:0,kind:'tree-broadleaf'}];
@@ -50,6 +50,43 @@ test('woodland trunks stop sight and shots while paths can use clear air above a
     assert(Core.attack(s,u,end));
     for(let i=0;i<50&&u.ammo.rpg>0;i++)tick(s,.05);
     assert.equal(u.ammo.rpg,0);assert(Math.abs(s.effect.sequence.find(shot=>shot.shooter===u.id).bx-499.78)<1e-8);
+
+    Object.assign(u,{x:499,y:500});
+    const before=u.travelled;
+    for(let i=0;i<32;i++){
+      assert(Core.travel(s,u,.065,0)>0,'continuous head-on input slides past the trunk');
+      assert(freePoint(s,u,u.id),'each accepted step clears the solid trunk');
+    }
+    assert(u.x>500.3&&Math.abs(u.y-500)>.44);
+    assert(u.travelled-before<=32*.065+1e-7);
+  }finally{w.dispose();}
+});
+test('painted brush across a sector seam conceals low stances without blocking sight rays or shots',async()=>{
+  const w=await make();
+  w.startPoint={x:482,y:500};
+  try{
+    for(const id of ['B03','C03']){
+      const sector=project.sectors.find(s=>s.id===id),raw=JSON.parse(fs.readFileSync(new URL(sector.file,base)));
+      raw.terrain=Array.from({length:240},()=>Array(240).fill('ground-grass'));
+      raw.props=[];raw.foliage={};delete raw.wallRuns;
+      for(let x=478;x<=482;x++){
+        const local=x-sector.origin.x;
+        if(local>=0&&local<240)raw.foliage[local+',20,0']=[50,false,'woodland-v1'];
+      }
+      w.cache.set(id,decodeTownSector(raw,sector));
+    }
+    const s=Core.enableRealtime(createSoloGame(DEFAULT_BUILD,1947,'mount-dora',{tourWorld:w})),u=hero(s);
+    const guard={...s.units.find(g=>g.team==='guard'),x:466,y:500,heading:0};
+    assert.equal(w.brushDepth(guard,u),2.25);
+    assert(Core.canSee(s,guard,u));
+    assert(Core.setStance(s,u,'kneeling')&&Core.canSee(s,guard,u));
+    assert(Core.setStance(s,u,'prone')&&!Core.canSee(s,guard,u));
+    guard.x=460;
+    assert(Core.setStance(s,u,'kneeling')&&!Core.canSee(s,guard,u));
+    assert(lineClear(s,guard,u));
+    assert(projectileSegmentClear(s,{...guard,h:1.1},{...u,h:.75}));
+    assert(Core.canSee(s,{...guard,x:479.1},u),'a guard can spot someone up close');
+    assert(Core.canSee(s,guard,{...u,x:483}),'open ground loses the brush benefit');
   }finally{w.dispose();}
 });
 test('water blocks walking while the source-supported Palm Island bridge remains reachable',async()=>{

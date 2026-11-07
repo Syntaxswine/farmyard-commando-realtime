@@ -212,7 +212,16 @@ function linkClear(s,grid,p,q,ignoreId){
   let open=inside?grid.walks[i]:0;if(!open){open=sceneryWalk(s,p,q)?1:2;if(inside)grid.walks[i]=open;}
   return open===1&&unitsWalk(s,p,q,ignoreId);
 }
-export function canSee(s,a,b){const d=distance(a,b),range=identifyRange(a,b,a.team==='squad'?35:26)*(b.sneaking?.7:1);return alive(a)&&d<=Math.max(1.5,range)&&lineClear(s,a,b);}
+// AFT charges 9 m of sight range per metre of full woodland. Apply the
+// concealed fraction from its kneeling (.75) and prone (.45) exposure weights.
+const BRUSH_SIGHT_COST={kneeling:9*.25,prone:9*.55};
+export function canSee(s,a,b){
+  const d=distance(a,b),range=identifyRange(a,b,a.team==='squad'?35:26)*(b.sneaking?.7:1);
+  if(!alive(a)||d>Math.max(1.5,range))return false;
+  const cost=BRUSH_SIGHT_COST[b.stance],town=getTourWorld(s);
+  if(town&&cost&&a.team==='guard'&&b.team==='squad'&&d>3&&d+cost*town.brushDepth(a,b)>range)return false;
+  return lineClear(s,a,b);
+}
 export function visibleOpponents(s){
   const u=hero(s);
   if(!alive(u))return [];
@@ -262,7 +271,57 @@ export function stop(s){s.queue=[];hero(s).isMoving=false;s.revision++;}
 // minimum 300s continuous-run budget and recovery while stationary.
 // Swept-disc collision prevents tunnelling. AP charges accepted displacement,
 // including wall slides, rather than requested input or pathfinder cells.
-export function travel(s,u,dx,dy,{enemy=false}={}){if((enemy?(!s.realtime&&s.phase!=='enemy')||!alive(u)||u.burningTurns:!canControl(s,u))||!Number.isFinite(dx)||!Number.isFinite(dy))return 0;const requested=Math.hypot(dx,dy);if(requested<EPS)return 0;const rate=movementRate(u),spends=!s.realtime&&(enemy||s.phase==='player');const budget=Math.min(requested,spends?u.ap/rate:Infinity);if(budget<EPS){u.isMoving=false;return 0;}const steps=Math.ceil(budget/.07),sx=dx/requested*budget/steps,sy=dy/requested*budget/steps;let walked=0;for(let i=0;i<steps;i++){let nx=u.x+sx,ny=u.y+sy;if(!freePoint(s,{x:nx,y:ny},u.id)){if(freePoint(s,{x:nx,y:u.y},u.id))ny=u.y;else if(freePoint(s,{x:u.x,y:ny},u.id))nx=u.x;else break;}const d=Math.hypot(nx-u.x,ny-u.y);if(d<EPS)break;u.heading=Math.atan2(ny-u.y,nx-u.x)*180/Math.PI;u.x=nx;u.y=ny;walked+=d;if(spends)u.ap=Math.max(0,u.ap-d*rate);u.travelled+=d;fireRules.enterFire(s,u);if(u.burningTurns)break;}u.isMoving=walked>EPS&&!u.burningTurns;if(walked){if(u.team==='squad'){s.solo.distance+=walked;if(spends)s.solo.apDistance+=walked*rate;}refresh(s);}return walked;}
+export function travel(s,u,dx,dy,{enemy=false}={}){
+  if((enemy?(!s.realtime&&s.phase!=='enemy')||!alive(u)||u.burningTurns:!canControl(s,u))||!Number.isFinite(dx)||!Number.isFinite(dy))return 0;
+  const requested=Math.hypot(dx,dy);
+  if(requested<EPS)return 0;
+  const rate=movementRate(u),spends=!s.realtime&&(enemy||s.phase==='player');
+  const budget=Math.min(requested,spends?u.ap/rate:Infinity);
+  if(budget<EPS){u.isMoving=false;return 0;}
+  const steps=Math.ceil(budget/.07),sx=dx/requested*budget/steps,sy=dy/requested*budget/steps,town=getTourWorld(s);
+  let walked=0;
+  for(let i=0;i<steps;i++){
+    let next={x:u.x+sx,y:u.y+sy};
+    if(!freePoint(s,next,u.id)){
+      const slide=town&&treeSlide(s,town,u,next);
+      if(slide)next=slide;
+      else if(freePoint(s,{x:next.x,y:u.y},u.id))next.y=u.y;
+      else if(freePoint(s,{x:u.x,y:next.y},u.id))next.x=u.x;
+      else break;
+    }
+    const d=distance(u,next);
+    if(d<EPS)break;
+    u.heading=headingTo(u,next);
+    u.x=next.x;u.y=next.y;walked+=d;
+    if(spends)u.ap=Math.max(0,u.ap-d*rate);
+    u.travelled+=d;fireRules.enterFire(s,u);
+    if(u.burningTurns)break;
+  }
+  u.isMoving=walked>EPS&&!u.burningTurns;
+  if(walked){
+    if(u.team==='squad'){s.solo.distance+=walked;if(spends)s.solo.apDistance+=walked*rate;}
+    refresh(s);
+  }
+  return walked;
+}
+
+function treeSlide(s,town,u,next){
+  const {x,y}=next,bounds=[x-RADIUS,y-RADIUS,x+RADIUS,y+RADIUS];
+  const trunk=town.solidsFor(bounds).find(solid=>solid.trunkHeight&&trunkDistance(next,solid)<RADIUS-EPS);
+  if(!trunk)return null;
+  const nx=u.x-trunk.centre[0],ny=u.y-trunk.centre[1],normal=Math.hypot(nx,ny);
+  if(normal<EPS)return null;
+  const tx=-ny/normal,ty=nx/normal,dx=x-u.x,dy=y-u.y;
+  const projected=dx*tx+dy*ty,minSlide=Math.hypot(dx,dy)*.5;
+  const amount=Math.max(Math.abs(projected),minSlide),side=Math.sign(projected)||1;
+  // Preserve the input's tangent. A nearly head-on step can pick either
+  // shoulder, while the normal collision check still handles nearby solids.
+  for(const direction of Math.abs(projected)<minSlide?[side,-side]:[side]){
+    const p={x:u.x+tx*amount*direction,y:u.y+ty*amount*direction};
+    if(freePoint(s,p,u.id))return p;
+  }
+  return null;
+}
 // A stable heap preserves tie order without sorting the whole frontier on every
 // expansion. The cap also bounds an unreachable request in a large open sector.
 export const NAVIGATION_NODE_LIMIT=8192;

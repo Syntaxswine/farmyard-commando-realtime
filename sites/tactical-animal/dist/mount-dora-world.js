@@ -5,6 +5,7 @@ import {trunkDistance,trunkSpan} from './trunk-geometry.js';
 import {MATURE_TREE_SCALE} from './aft/tactics/biome-foliage-data.js';
 import {groundHash} from './aft/tactics/biome-ground-composition.js';
 import {patrolError} from './aft/tactics/character-patrol.js';
+import {woodlandDepth} from './designer/a20b343a0234/tactics/core/woodland.js';
 export const TOWN_LIMITS=Object.freeze({decodedSectors:9,concurrentFetches:2,pendingFetches:9,sectorBytes:4_000_000});
 export const TOWN_GROUNDS=Object.freeze(['ground-grass','water','woodland','ground-dirt','ground-gravel','ground-asphalt','ground-concrete','ground-wood-planks','bridge','floor']);
 const groundKinds=new Set(TOWN_GROUNDS),EPS=1e-7,BUCKET=8;
@@ -222,6 +223,23 @@ export class TownWorld{
       if(span&&span[1]>EPS&&span[0]<1-EPS)return false;
     }
     return true;
+  }
+  brushDepth(a,b){
+    const bx=Math.round(b.x),by=Math.round(b.y),target=this.packetForCell(bx,by);
+    if(!target)return 0;
+    const origin=target.sector.origin;
+    if(!target.raw.foliage?.[(bx-origin.x)+','+(by-origin.y)+',0'])return 0;
+    const bounds=[Math.min(a.x,b.x),Math.min(a.y,b.y),Math.max(a.x,b.x),Math.max(a.y,b.y)];
+    let depth=0;
+    // AFT integrates density in native metre cells. Sum disjoint sector
+    // contributions so streaming boundaries do not interrupt concealment.
+    for(const packet of this.cache.values()){
+      const {x,y}=packet.sector.origin;
+      if(intersect(bounds,[x-.5,y-.5,x+239.5,y+239.5])){
+        depth+=woodlandDepth(packet.raw,{x:a.x-x,y:a.y-y},{x:b.x-x,y:b.y-y});
+      }
+    }
+    return depth;
   }
   geometryBoxes(bounds=[-.5,-.5,1439.5,1679.5]){
     const walls=this.wallsFor(bounds,{walk:true}).map(w=>({x0:w.bounds[0],y0:w.bounds[1],x1:w.bounds[2],y1:w.bounds[3],height:WALL_KIT.height,kind:'wall'}));
