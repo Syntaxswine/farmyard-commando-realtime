@@ -83,6 +83,9 @@ try{
   assert.deepEqual(new Set(start.guards.map(g=>g.weapon)),new Set(['pistol','smg','rifle','shotgun']));
   assert(start.guards.every(g=>g.maxHp===Math.round(start.player.hp/2)&&g.firearms===Math.round(start.player.stats.firearms/2)));
   assert(start.guards.some(g=>g.patrolPoints===2)&&start.guards.some(g=>g.patrolPoints>2));
+  const sneak=page.getByRole('button',{name:'Sneak',exact:true});
+  assert.equal(await sneak.getAttribute('aria-pressed'),'false');
+  assert.equal(await sneak.getAttribute('data-stealth'),'clear');
   const layout=await page.evaluate(async()=>{
     const app=await import(document.querySelector('script[src*="app.js"]').src),town=app.inspectMountDora(),p=town.player;
     const center=app.projectRealtimePoint(p),east=app.projectRealtimePoint({...p,x:p.x+3}),north=app.projectRealtimePoint({...p,y:p.y-3});
@@ -115,10 +118,16 @@ try{
   await page.locator('#stance-cycle').click();
   const crouched=await wait(page,s=>s.elapsed>slid.elapsed+1&&s.player.stance==='kneeling','Mount Dora crouches in brush');
   assert(!woodlandGuard(crouched).alert);assert.equal(crouched.player.hp,inBrush.player.hp);
+  assert.equal(await sneak.getAttribute('data-stealth'),'brush');
+  assert.equal(await page.locator('#sneak-indicator').textContent(),'BRUSH');
+  assert.equal(await page.locator('#sneak-status').textContent(),'Brush concealment.');
+  await sneak.screenshot({path:path.join(out,'sneak-brush.png')});
   await page.locator('#stance-cycle').click();
-  const exposed=await wait(page,s=>woodlandGuard(s).alert,'Mount Dora patrol spots a standing target',45000);
-  assert.equal(exposed.player.stance,'standing');
-  mark('Mount Dora brush conceals a crawling or kneeling player and held movement slides around trunks');
+  await page.locator('#movement-cycle[data-stealth="spotted"]').waitFor({timeout:45000});
+  const exposed=await snapshot(page);
+  assert.equal(exposed.player.stance,'standing');assert(woodlandGuard(exposed).alert);
+  assert.equal(await page.locator('#sneak-indicator').textContent(),'SEEN');
+  mark('Mount Dora Sneak reports brush cover and direct sight while held movement slides around trunks');
 
   // Normal checkpoints supply clear approaches to the authored street patrol
   // and B03 post. The game loads and advances the actual map and roster.
@@ -190,7 +199,9 @@ try{
     s=await wait(page,s=>s.kills>0||s.ammo<30,'automatic engagement',25000);assert(s.autoFire);assert.notEqual(s.phase,'enemy');await page.locator('#menu').click();await screenshot(page,'desktop-fire-at-will');mark('desktop fire at will in authored encounter',{ammo:s.ammo,kills:s.kills,phase:s.phase});
     await page.getByRole('button',{name:'Choose operation, animal & loadout',exact:true}).click();assert.equal(await page.locator('#resume').isVisible(),true);await page.locator('#resume').click();s=await wait(page,s=>s.ready,'saved encounter');assert(s.autoFire);assert.equal(s.fireMode,'auto');assert(!s.triggerHeld);mark('desktop real operation save/resume');
   }else{
-    const original=await snapshot(page);await tap(page,'#movement-cycle',true);assert((await snapshot(page)).player.sneaking);await tap(page,'#movement-cycle',true);assert(!(await snapshot(page)).player.sneaking);
+    const original=await snapshot(page),sneak=page.getByRole('button',{name:'Sneak',exact:true});
+    await tap(page,'#movement-cycle',true);assert((await snapshot(page)).player.sneaking);assert.equal(await sneak.getAttribute('aria-pressed'),'true');
+    await tap(page,'#movement-cycle',true);assert(!(await snapshot(page)).player.sneaking);assert.equal(await sneak.getAttribute('aria-pressed'),'false');
     const stick=await page.locator('#joystick').boundingBox(),cx=stick.x+stick.width/2,cy=stick.y+stick.height/2,cdp=await context.newCDPSession(page);
     await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:cx,y:cy}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:cx-25,y:cy+8}]});try{s=await wait(page,s=>Math.hypot(s.player.x-original.player.x,s.player.y-original.player.y)>.1,'held phone movement',8000);}finally{await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});}mark('phone actual touch movement and sneak');
     // Aim north in world space, using the same native stick controls as a player.

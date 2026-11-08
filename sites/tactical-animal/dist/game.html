@@ -62,7 +62,7 @@
     </div><div class="thumb-layout">
       <div class="left-controls">
         <button id="look" class="square-control industrial-switch" data-face="red" data-lit="false" type="button" aria-label="0 visible opponents. Recenter on your animal." disabled><span class="switch-legend"><span class="switch-icon eye-symbol" aria-hidden="true"><svg class="switch-glyph" viewBox="0 0 32 32"><use href="assets/ui/industrial-switches/symbols.svg#look"/></svg><strong id="visible-count" class="eye-count">0</strong></span><span class="switch-label">LOOK</span></span></button>
-        <button id="movement-cycle" class="square-control cycle-control industrial-switch" data-lit="false" type="button" aria-label="Movement: off. Tap to cycle; hold for choices." aria-haspopup="dialog" aria-controls="control-picker" aria-expanded="false"><span class="switch-legend"><span id="movement-icon" class="switch-icon control-icon" aria-hidden="true"></span><span id="movement-label" class="switch-label">OFF</span><span class="switch-cost">FREE</span></span></button>
+        <button id="movement-cycle" class="square-control cycle-control industrial-switch" data-lit="false" type="button" aria-label="Movement: off. Tap to cycle; hold for choices." aria-haspopup="dialog" aria-controls="control-picker" aria-expanded="false"><span class="switch-legend"><span id="movement-icon" class="switch-icon control-icon" aria-hidden="true"></span><span id="movement-label" class="switch-label">OFF</span><span class="switch-cost">FREE</span><span id="sneak-indicator" class="sneak-indicator" aria-hidden="true" hidden></span></span></button>
         <button id="stance-cycle" class="square-control cycle-control industrial-switch" data-lit="false" type="button" aria-label="Stance: standing. Tap to cycle; hold for choices." aria-haspopup="dialog" aria-controls="control-picker" aria-expanded="false"><span class="switch-legend"><span id="stance-icon" class="switch-icon control-icon" aria-hidden="true"></span><span id="stance-label" class="switch-label">STAND</span><span class="switch-cost">FREE</span></span></button>
       </div>
       <div class="stick-column">
@@ -78,6 +78,7 @@
     </div></div>
   </section>
   <div id="guard-alert-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div id="sneak-status" class="sr-only" role="status" aria-atomic="true"></div>
   <dialog id="control-picker" class="control-picker" aria-labelledby="control-picker-title"><div class="picker-heading"><strong id="control-picker-title"></strong><span id="control-picker-cost">FREE SWITCH · FREE</span><button id="close-picker" aria-label="Close choices">×</button></div><div id="control-choices" class="control-choices"></div><p id="control-picker-hint"></p></dialog>
   <dialog id="overlay"><div id="overlay-content"></div><div class="context-panel" id="context" hidden></div><div id="overlay-actions" class="dialog-actions"></div></dialog>
   <div class="toast" id="toast" role="status" hidden></div>

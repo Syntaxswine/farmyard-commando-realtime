@@ -72,7 +72,7 @@ async function travelToLandmark(id){
   catch(error){if(state===current&&active)toast(error.message.includes('obstructed')?error.message:'Could not load that landmark approach. Your animal has stayed here. Choose the landmark again to retry.');}
   finally{if(state===current){tourTransit=false;paused=false;$('loading').textContent='Preparing the town…';view?.reportLoading();frameClock.reset(performance.now());renderBattle();}}
 }
-function tourNotes(){showDialog('<p class="eyebrow">MOUNT DORA</p><h2>Walking tour.</h2><p>Explore the streets, parks and lakefront. Crouch or crawl through brush to stay harder to spot. Water is impassable except for mapped supported routes. Closed buildings remain closed; the town is a source-based exterior approximation.</p><p>'+Math.round(state.solo.distance)+' metres walked. Your animal, equipment, resources and explored area have their own tour save.</p><p>Map data © OpenStreetMap contributors, ODbL 1.0.</p>',[['Back to tour menu',tourMenu],['Continue walking',()=>{},'primary']]);}
+function tourNotes(){showDialog('<p class="eyebrow">MOUNT DORA</p><h2>Walking tour.</h2><p>Explore the streets, parks and lakefront. Crouch or crawl through brush to stay harder to spot. On the Sneak button, BRUSH signals concealment and SEEN means a guard has you in sight. Water is impassable except for mapped supported routes. Closed buildings remain closed; the town is a source-based exterior approximation.</p><p>'+Math.round(state.solo.distance)+' metres walked. Your animal, equipment, resources and explored area have their own tour save.</p><p>Map data © OpenStreetMap contributors, ODbL 1.0.</p>',[['Back to tour menu',tourMenu],['Continue walking',()=>{},'primary']]);}
 
 let build={...DEFAULT_BUILD},state=null,view=null,active=false,paused=false,selected=null,aim='hip',zone='torso',burst=false,contextKey='',lastUI=0,lastSave=0,lastPhase='',stick={x:0,y:0},stickPointer=null,resultShown=false,aimViewport=null;
 const grenadeAim=new GrenadeAim();
@@ -385,8 +385,11 @@ function renderBattle(){if(!state)return;const u=hero(state),combat=state.phase=
   $('turn-label').innerHTML=state.phase==='enemy'?'GUARD<br>TURN':'END<br>TURN';
   $('joystick').classList.toggle('unavailable',!can);
   renderGrenadeControls();renderFlameControls();
-  const mode=Core.movementModeOf(u);
-  renderCycle('movement',mode,mode==='walk'?'OFF':mode.toUpperCase(),movementNames[mode],can&&!aiming());
+  if(REALTIME)renderSneak(u,can&&!aiming());
+  else{
+    const mode=Core.movementModeOf(u);
+    renderCycle('movement',mode,mode==='walk'?'OFF':mode.toUpperCase(),movementNames[mode],can&&!aiming());
+  }
   renderCycle('stance',u.stance,{standing:'STAND',kneeling:'KNEEL',prone:'CRAWL'}[u.stance],stanceNames[u.stance],can&&!aiming());
   const contacts=Core.visibleOpponents(state),focused=contacts.find(g=>g.id===view?.focusedId);
   const nextFocus=nextCameraFocus(contacts,view?.focusedId);
@@ -543,6 +546,32 @@ function renderCycle(kind,value,label,name,can){
   b.dataset.lit=String(kind==='stance'?value!=='standing':value!=='walk');
   if(b.dataset.value===value)return;b.dataset.value=value;
   $(kind+'-icon').innerHTML=poseIcon(value);$(kind+'-label').textContent=label;
+}
+const sneakLabels={
+  clear:['—','Out of sight.'],
+  brush:['BRUSH','Brush concealment.'],
+  spotted:['SEEN','A guard has you in sight.']
+};
+function renderSneak(u,can){
+  const button=$('movement-cycle'),indicator=$('sneak-indicator');
+  const status=Core.sneakStatus(state),pressed=String(u.sneaking),initial=button.dataset.stealth===undefined;
+  button.disabled=!can;
+  if(initial||button.dataset.lit!==pressed){
+    button.dataset.lit=pressed;
+    button.setAttribute('aria-pressed',pressed);
+  }
+  if(initial){
+    button.setAttribute('aria-label','Sneak');
+    button.setAttribute('aria-describedby','sneak-status');
+    $('movement-icon').innerHTML=poseIcon('sneak');
+    $('movement-label').textContent='SNEAK';
+    indicator.hidden=false;
+  }
+  if(button.dataset.stealth===status)return;
+  button.dataset.stealth=status;
+  const [label,description]=sneakLabels[status];
+  indicator.textContent=label;
+  $('sneak-status').textContent=description;
 }
 function changeControl(kind,value){
   act(()=>{
@@ -798,7 +827,7 @@ function realtimeMenu(){
     ['Restart this operation',()=>isTour(state)?launchTour():start(createSoloGame(state.solo.build,1947,state.solo.missionId))]
   ]);
 }
-function realtimeHelp(){showDialog('<p class="eyebrow">REAL-TIME FIELD NOTES</p><h2>Move. Conceal. Commit.</h2><p>Joystick, WASD or arrows move. Standing runs by default; crouching and crawling are slower. Sneak halves the speed of your posture. Stance switches remain free and bounce through kneeling.</p><p>The top right button toggles Hold Fire / Fire at Will (Space). Hold it to choose your fire mode and nearest, weakest or biggest-threat priority. Tap the aim button above the joystick (Q) to cycle hip fire, aimed and full aim. Higher aim takes longer, including before the first shot. A valid current target stays selected unless a substantially better target appears.</p><p>Tap an opponent for the original CRT body-location and manual firing controls, and to pin that target. Choose Single, 3-round Burst or Full Auto on the loadout screen. Open Weapons beside Aim to change modes, swap guns or reload in the field. Tap Fire for one shot or one burst. In Full Auto, hold Fire to keep firing and release to stop. Fire at Will uses the same mode. Empty guns automatically reload from your finite reserve; R or Weapons reloads early. You can move while reloading. Options and other dialogs pause the whole encounter; switching away also pauses without catching up later.</p><p>Grenades (G), flamethrowers (F), point shots, doors, loot and treatment retain their production controls. Area aiming suspends your automatic gunfire while enemies continue acting. Release the joystick before confirming a throw or flame burst. Flamethrowers also work with Fire at Will: one cone every 3 seconds, with no aiming. They use their normal cone, fuel and reload rules. Explosive weapons remain deliberate.</p><p>An opening hit while sneaking against an unaware opponent deals ×1.5 damage. Noise gives guards a place to investigate; friendly gunfire shares the shooter’s last known opponent position. Guards search after reaching that area, rather than forgetting mid-route. Kills earn the weapon skill XP; stealth kills also earn Sneak XP. First improvement: 3 kills in that skill, then progressively more.</p>',[['Back to menu',realtimeMenu],['Return to operation',()=>{},'primary']]);}
+function realtimeHelp(){showDialog('<p class="eyebrow">REAL-TIME FIELD NOTES</p><h2>Move. Conceal. Commit.</h2><p>Joystick, WASD or arrows move. Standing runs by default; crouching and crawling are slower. Tap Sneak to halve your pace. Its small lamp reads BRUSH when foliage gives you concealment and SEEN when a guard has you in sight. Stance switches remain free and bounce through kneeling.</p><p>The top right button toggles Hold Fire / Fire at Will (Space). Hold it to choose your fire mode and nearest, weakest or biggest-threat priority. Tap the aim button above the joystick (Q) to cycle hip fire, aimed and full aim. Higher aim takes longer, including before the first shot. A valid current target stays selected unless a substantially better target appears.</p><p>Tap an opponent for the original CRT body-location and manual firing controls, and to pin that target. Choose Single, 3-round Burst or Full Auto on the loadout screen. Open Weapons beside Aim to change modes, swap guns or reload in the field. Tap Fire for one shot or one burst. In Full Auto, hold Fire to keep firing and release to stop. Fire at Will uses the same mode. Empty guns automatically reload from your finite reserve; R or Weapons reloads early. You can move while reloading. Options and other dialogs pause the whole encounter; switching away also pauses without catching up later.</p><p>Grenades (G), flamethrowers (F), point shots, doors, loot and treatment retain their production controls. Area aiming suspends your automatic gunfire while enemies continue acting. Release the joystick before confirming a throw or flame burst. Flamethrowers also work with Fire at Will: one cone every 3 seconds, with no aiming. They use their normal cone, fuel and reload rules. Explosive weapons remain deliberate.</p><p>An opening hit while sneaking against an unaware opponent deals ×1.5 damage. Noise gives guards a place to investigate; friendly gunfire shares the shooter’s last known opponent position. Guards search after reaching that area, rather than forgetting mid-route. Kills earn the weapon skill XP; stealth kills also earn Sneak XP. First improvement: 3 kills in that skill, then progressively more.</p>',[['Back to menu',realtimeMenu],['Return to operation',()=>{},'primary']]);}
 function realtimeHardware(parent,{control,paint,icon,mark='',pressed,bar=false,disabled=false,onClick}){
   const b=document.createElement('button');b.type='button';b.className='industrial-switch shooting-switch'+(bar?' fire-bar':'');b.dataset.control=control;b.dataset.face=bar?'red':'amber';b.disabled=disabled;
   b.setAttribute('aria-label',paint+(mark?' · '+mark:''));if(pressed!==undefined)b.setAttribute('aria-pressed',String(pressed));

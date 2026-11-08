@@ -6,6 +6,7 @@ import {MATURE_TREE_SCALE} from './aft/tactics/biome-foliage-data.js';
 import {groundHash} from './aft/tactics/biome-ground-composition.js';
 import {patrolError} from './aft/tactics/character-patrol.js';
 import {woodlandDepth} from './designer/a20b343a0234/tactics/core/woodland.js';
+import {foliageDepth} from './designer/a20b343a0234/tactics/foliage-data.js';
 export const TOWN_LIMITS=Object.freeze({decodedSectors:9,concurrentFetches:2,pendingFetches:9,sectorBytes:4_000_000});
 export const TOWN_GROUNDS=Object.freeze(['ground-grass','water','woodland','ground-dirt','ground-gravel','ground-asphalt','ground-concrete','ground-wood-planks','bridge','floor']);
 const groundKinds=new Set(TOWN_GROUNDS),EPS=1e-7,BUCKET=8;
@@ -223,6 +224,16 @@ export class TownWorld{
       if(span&&span[1]>EPS&&span[0]<1-EPS)return false;
     }
     return true;
+  }
+  hasBrush(p,radius){
+    // The footprint can still overlap brush while the centre passes a trunk.
+    for(let y=Math.round(p.y-radius);y<=Math.round(p.y+radius);y++)for(let x=Math.round(p.x-radius);x<=Math.round(p.x+radius);x++){
+      const packet=this.packetForCell(x,y);
+      if(!packet||boxDistance(p,[x-.5,y-.5,x+.5,y+.5])>=radius)continue;
+      const origin=packet.sector.origin;
+      if(foliageDepth(packet.raw,x-origin.x,y-origin.y)>0)return true;
+    }
+    return false;
   }
   brushDepth(a,b){
     const bounds=[Math.min(a.x,b.x),Math.min(a.y,b.y),Math.max(a.x,b.x),Math.max(a.y,b.y)];

@@ -60,6 +60,30 @@ test('mode switches light for run, sneak and a lowered stance while free taps pr
   assert.equal(a.u.ap,ap);
 });
 
+test('the real-time Sneak toggle shows sight independently of pace',()=>{
+  const a=app({realTime:true}),button=a.el('movement-cycle'),indicator=a.el('sneak-indicator');
+  assert(a.u.running);
+  assert.equal(button['aria-label'],'Sneak');
+  assert.equal(button['aria-pressed'],'false');
+  assert.equal(button.dataset.stealth,'clear');
+  assert.equal(a.el('movement-label').textContent,'SNEAK');
+  button.click();
+  assert(a.u.sneaking);
+  assert.equal(button['aria-pressed'],'true');
+  assert.equal(button.dataset.stealth,'clear');
+
+  const guard=a.s.units.find(u=>u.team==='guard');
+  Object.assign(guard,{x:a.u.x+1,y:a.u.y,heading:180});
+  Core.refresh(a.s);a.advance(3);
+  assert.equal(button.dataset.stealth,'spotted');
+  assert.equal(indicator.textContent,'SEEN');
+  assert.equal(a.el('sneak-status').textContent,'A guard has you in sight.');
+  button.click();
+  assert(a.u.running);
+  assert.equal(button['aria-pressed'],'false');
+  assert.equal(button.dataset.stealth,'spotted');
+});
+
 test('the opponent lamp follows visibility and goes dark after contact is lost',()=>{
   const a=app(),eye=a.el('look'),guard=a.s.units.find(u=>u.team==='guard');
   assert.equal(eye.dataset.lit,'false');

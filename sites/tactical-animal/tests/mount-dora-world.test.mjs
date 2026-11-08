@@ -76,18 +76,34 @@ test('painted brush across a sector seam conceals low stances without blocking s
       w.cache.set(id,decodeTownSector(raw,sector));
     }
     const s=Core.enableRealtime(createSoloGame(DEFAULT_BUILD,1947,'mount-dora',{tourWorld:w})),u=hero(s);
-    const guard={...s.units.find(g=>g.team==='guard'),x:466,y:500,heading:0};
+    const guard=s.units.find(g=>g.team==='guard');
+    Object.assign(guard,{x:466,y:500,heading:0});
+    s.units=[u,guard];Core.refresh(s);
     assert.equal(w.brushDepth(guard,u),2.25);
     assert(Core.canSee(s,guard,u));
+    assert.equal(Core.sneakStatus(s),'spotted');
     assert(Core.setStance(s,u,'kneeling')&&Core.canSee(s,guard,u));
+    assert.equal(Core.sneakStatus(s),'spotted');
     assert(Core.setStance(s,u,'prone')&&!Core.canSee(s,guard,u));
+    assert.equal(Core.sneakStatus(s),'brush');
     guard.x=460;
     assert(Core.setStance(s,u,'kneeling')&&!Core.canSee(s,guard,u));
     assert(lineClear(s,guard,u));
     assert(projectileSegmentClear(s,{...guard,h:1.1},{...u,h:.75}));
-    assert(Core.canSee(s,{...guard,x:479.1},u),'a guard can spot someone up close');
-    assert(!Core.canSee(s,guard,{...u,x:483}),'brush still conceals an animal just beyond the paint');
     assert(Core.canSee(s,{...guard,y:502},{...u,y:502}),'a wholly open sight line has no brush benefit');
+
+    u.x=483;Core.refresh(s);
+    assert(!Core.canSee(s,guard,u),'brush still conceals an animal just beyond the paint');
+    assert.equal(Core.sneakStatus(s),'brush');
+    u.y=502;guard.heading=180;Core.refresh(s);
+    assert(guard.alert,'the guard still remembers the player');
+    assert.equal(Core.sneakStatus(s),'clear','alert memory alone does not indicate a sighting');
+
+    Object.assign(u,{x:482.68,y:500});guard.x=400;Core.refresh(s);
+    assert.equal(Core.sneakStatus(s),'brush','a crouched footprint in brush is useful before contact');
+    guard.x=479.8;guard.heading=0;Core.refresh(s);
+    assert(Core.canSee(s,guard,u),'a guard can spot someone up close');
+    assert.equal(Core.sneakStatus(s),'spotted','direct sight overrides brush cover');
   }finally{w.dispose();}
 });
 test('water blocks walking while the source-supported Palm Island bridge remains reachable',async()=>{

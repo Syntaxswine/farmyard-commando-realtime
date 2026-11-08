@@ -215,13 +215,16 @@ function linkClear(s,grid,p,q,ignoreId){
 // AFT charges 9 m of sight range per metre of full woodland. Apply the
 // concealed fraction from its kneeling (.75) and prone (.45) exposure weights.
 const BRUSH_SIGHT_COST={kneeling:9*.25,prone:9*.55};
-export function canSee(s,a,b){
+const sneakStates=new WeakMap();
+const sneakStatus=s=>s.solo.status==='active'?(sneakStates.get(s)??'clear'):'clear';
+function sightResult(s,a,b){
   const d=distance(a,b),range=identifyRange(a,b,a.team==='squad'?35:26)*(b.sneaking?.7:1);
-  if(!alive(a)||d>Math.max(1.5,range))return false;
+  if(!alive(a)||d>Math.max(1.5,range))return 'blocked';
   const cost=BRUSH_SIGHT_COST[b.stance],town=getTourWorld(s);
-  if(town&&cost&&a.team==='guard'&&b.team==='squad'&&d>3&&d+cost*town.brushDepth(a,b)>range)return false;
-  return lineClear(s,a,b);
+  if(town&&cost&&a.team==='guard'&&b.team==='squad'&&d>3&&d+cost*town.brushDepth(a,b)>range)return 'brush';
+  return lineClear(s,a,b)?'spotted':'blocked';
 }
+export function canSee(s,a,b){return sightResult(s,a,b)==='spotted';}
 export function visibleOpponents(s){
   const u=hero(s);
   if(!alive(u))return [];
@@ -248,14 +251,23 @@ function visibility(s){
   s.fogAt={x:u.x,y:u.y};
 }
 export function refresh(s,{forceFog=false}={}){
-  const u=hero(s),town=getTourWorld(s);
-  s.detected=new Set(s.units.filter(g=>g.team==='guard'&&alive(g)&&canSee(s,u,g)).map(g=>g.id));
-  for(const g of s.units.filter(g=>g.team==='guard'&&alive(g)))if(canSee(s,g,u)){g.alert=true;g.lastKnown={x:u.x,y:u.y};g.alertAge=0;}
+  const u=hero(s),town=getTourWorld(s),guards=s.units.filter(g=>g.team==='guard'&&alive(g));
+  s.detected=new Set(guards.filter(g=>canSee(s,u,g)).map(g=>g.id));
+  let status='clear';
+  for(const g of guards){
+    const sight=sightResult(s,g,u);
+    if(sight==='spotted'){
+      g.alert=true;g.lastKnown={x:u.x,y:u.y};g.alertAge=0;status='spotted';
+    }else if(s.realtime&&status==='clear'&&sight==='brush'&&lineClear(s,g,u))status='brush';
+  }
   if(town){if(forceFog)delete s.fogAt;town.reveal(s,u);}
   else if(!s.fogAt||distance(u,s.fogAt)>.25||forceFog)visibility(s);
   if(!alive(u)){s.phase='lost';s.solo.status='lost';s.queue=[];u.isMoving=false;s.revision++;return;}
-  const guards=s.units.filter(g=>g.team==='guard'&&alive(g));
-  if(s.realtime){s.phase=!guards.length&&!firePending(s)&&!missionForState(s).exploration?'won':'explore';s.revision++;return;}
+  if(s.realtime){
+    if(status==='clear'&&BRUSH_SIGHT_COST[u.stance]&&town?.hasBrush(u,RADIUS))status='brush';
+    sneakStates.set(s,status);
+    s.phase=!guards.length&&!firePending(s)&&!missionForState(s).exploration?'won':'explore';s.revision++;return;
+  }
   // An open-ended activity has no victory objective; actions still enter the
   // same AP, enemy-turn, injury and fire lifecycle as every other operation.
   if(!guards.length&&!firePending(s)&&!missionForState(s).exploration){if(s.phase!=='won')s.queue=[];s.phase='won';}
@@ -381,7 +393,12 @@ export function navigationPath(s,u,x,y){
 }
 export function move(s,u,x,y){if(!canControl(s,u))return false;const path=navigationPath(s,u,x,y);if(!path?.length)return false;s.queue=path;s.revision++;return true;}
 export function turnTo(s,u,heading){if(!canControl(s,u)||!Number.isFinite(heading))return false;u.heading=heading;refresh(s);return true;}
-export function setMovementMode(s,u,mode){if(!canControl(s,u)||!['run','sneak','walk'].includes(mode))return false;u.running=s.realtime?mode!=='sneak':mode==='run';u.sneaking=mode==='sneak';s.revision++;return true;}
+export function setMovementMode(s,u,mode){
+  if(!canControl(s,u)||!['run','sneak','walk'].includes(mode))return false;
+  u.running=s.realtime?mode!=='sneak':mode==='run';u.sneaking=mode==='sneak';
+  if(s.realtime)refresh(s);else s.revision++;
+  return true;
+}
 export function setStance(s,u,stance){if(!canControl(s,u)||!['standing','kneeling','prone'].includes(stance)||u.stance===stance)return false;u.stance=stance;refresh(s,{forceFog:true});return true;}
 const random=s=>{s.seed=(Math.imul(s.seed,1664525)+1013904223)>>>0;return s.seed/4294967296;};
 export const grenadeCost=u=>WEAPONS.grenade.cost*(['pistol','pistol-offhand','smg'].includes(u.weapon)?.5:1);
@@ -806,4 +823,4 @@ export function realtimeWeaponAim(s,u){
 }
 const pressRealtimeTrigger=(s,u,target,zone,aim)=>realtimeRules.pressTrigger(s,u,target,zone,aim);
 const releaseRealtimeTrigger=(s,tap)=>realtimeRules.releaseTrigger(s,tap);
-export const Core={enableRealtime,configureRealtime,pinRealtimeTarget,realtimeStatus,realtimeTarget,pressRealtimeTrigger,releaseRealtimeTrigger,tankExplosionChance,ignite,enterFire,WEAPONS,AIM_ZONES,key,alive,movementModeOf,movementRate,movementSpeed,combatCosts,canControl,canSee,visibleOpponents,refresh,log,stop,travel,navigationPath,move,turnTo,setMovementMode,setStance,grenadeCost,grenadeTrajectory,grenadeAffects,grenadeBlastFootprint,previewGrenade,throwGrenade,previewFlame,fireFlame,previewPointAttack,previewAttack,attack,equip,reload,endTurn,headingTo,interactionObjects,nearbyInteractions,previewInteraction,performInteraction,restoreRuntimeSystems};
+export const Core={enableRealtime,configureRealtime,pinRealtimeTarget,realtimeStatus,realtimeTarget,pressRealtimeTrigger,releaseRealtimeTrigger,tankExplosionChance,ignite,enterFire,WEAPONS,AIM_ZONES,key,alive,movementModeOf,movementRate,movementSpeed,combatCosts,canControl,canSee,sneakStatus,visibleOpponents,refresh,log,stop,travel,navigationPath,move,turnTo,setMovementMode,setStance,grenadeCost,grenadeTrajectory,grenadeAffects,grenadeBlastFootprint,previewGrenade,throwGrenade,previewFlame,fireFlame,previewPointAttack,previewAttack,attack,equip,reload,endTurn,headingTo,interactionObjects,nearbyInteractions,previewInteraction,performInteraction,restoreRuntimeSystems};
