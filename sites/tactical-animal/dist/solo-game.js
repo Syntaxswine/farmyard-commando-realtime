@@ -217,9 +217,10 @@ function linkClear(s,grid,p,q,ignoreId){
 const BRUSH_SIGHT_COST={kneeling:9*.25,prone:9*.55};
 const sneakStates=new WeakMap();
 const sneakStatus=s=>s.solo.status==='active'?(sneakStates.get(s)??'clear'):'clear';
+export const sightRange=(observer,target)=>Math.max(1.5,identifyRange(observer,target,observer.team==='squad'?35:26)*(target.sneaking?.7:1));
 function sightResult(s,a,b){
-  const d=distance(a,b),range=identifyRange(a,b,a.team==='squad'?35:26)*(b.sneaking?.7:1);
-  if(!alive(a)||d>Math.max(1.5,range))return 'blocked';
+  const d=distance(a,b),range=sightRange(a,b);
+  if(!alive(a)||d>range)return 'blocked';
   const cost=BRUSH_SIGHT_COST[b.stance],town=getTourWorld(s);
   if(town&&cost&&a.team==='guard'&&b.team==='squad'&&d>3&&d+cost*town.brushDepth(a,b)>range)return 'brush';
   return lineClear(s,a,b)?'spotted':'blocked';

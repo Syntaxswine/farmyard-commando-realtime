@@ -79,7 +79,7 @@ try{
   await context.addInitScript(installNativeProbe);await page.goto(`http://127.0.0.1:${port}/game.html?activity=mount-dora`);
   assert.equal(await page.locator('#operation-select').inputValue(),'mount-dora');await page.locator('#deploy').click();
   const start=await wait(page,s=>s.ready,'Mount Dora renderer',90000);
-  assert.equal(start.guards.length,42);assert.equal(start.contacts.length,0);
+  assert.equal(start.guards.length,42);assert.equal(start.contacts.length,0);assert.equal(start.guardSight.length,0);
   assert.deepEqual(new Set(start.guards.map(g=>g.weapon)),new Set(['pistol','smg','rifle','shotgun']));
   assert(start.guards.every(g=>g.maxHp===Math.round(start.player.hp/2)&&g.firearms===Math.round(start.player.stats.firearms/2)));
   assert(start.guards.some(g=>g.patrolPoints===2)&&start.guards.some(g=>g.patrolPoints>2));
@@ -137,10 +137,12 @@ try{
   mark('Mount Dora runs the authored sidewalk patrol in the browser');
   const sentry=start.guards.find(g=>g.id===14);
   await resumeTownAt(page,{x:356,y:605});
-  await wait(page,s=>s.ready&&s.guards.find(g=>g.id===sentry.id).ammo.pistol<sentry.ammo.pistol,'Mount Dora sentry returns fire',30000);
+  await wait(page,s=>s.ready&&s.guardSight.includes(sentry.id)&&s.guards.find(g=>g.id===sentry.id).ammo.pistol<sentry.ammo.pistol,'Mount Dora sentry returns fire with a visible sight outline',30000);
+  await screenshot(page,'mount-dora-guard-sight');
   await page.locator('#end-turn').click();
   const won=await wait(page,s=>s.kills===1&&s.objects.some(o=>o.id==='body:'+sentry.id),'Mount Dora Fire at Will defeats the sentry',25000);
-  assert(won.ammo<start.ammo);await screenshot(page,'mount-dora-sentry');
+  assert(!won.guardSight.includes(sentry.id));assert(won.ammo<start.ammo);await screenshot(page,'mount-dora-sentry');
+  mark('Mount Dora draws the detected sentry sight outline until the sentry falls');
   await page.locator('#menu').click();await page.reload();await page.locator('#resume').click();
   const resumed=await wait(page,s=>s.ready,'Mount Dora combat checkpoint',90000);
   assert.equal(resumed.kills,1);assert.equal(resumed.guards.find(g=>g.id===sentry.id).hp,0);
