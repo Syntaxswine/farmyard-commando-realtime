@@ -28,7 +28,7 @@ test('replacing a field clears pending effects, old actors, gestures, and grenad
   assert.equal(view.generation,5);assert.equal(cleared,true);assert.equal(built,state);assert.equal(actorDisposed,true);
   assert.equal(geometryDisposed,true);assert.equal(materialDisposed,true);assert.equal(scene.children.length,0);assert.deepEqual(view.effects,[]);assert.equal(view.lastEffect,null);
   assert.equal(released,9);assert.equal(view.pointers.size,0);assert.equal(view.pending.size,0);assert.equal(view.actors.size,0);assert.equal(view.samples.size,0);assert.equal(view.failed.size,0);
-  assert.equal(view.grenadeCamera,null);assert.equal(view.returnSpan,null);assert.equal(view.gesture,null);assert.equal(view.pinch,null);assert.equal(view.focusedId,null);assert.equal(view.follow,true);assert.equal(view.span,13);
+  assert.equal(view.grenadeCamera,null);assert.equal(view.returnSpan,null);assert.equal(view.gesture,null);assert.equal(view.pinch,null);assert.equal(view.focusedId,null);assert.equal(view.follow,true);assert.equal(view.span,18.72);
   assert.deepEqual(view.target.toArray(),[4,0,25]);assert.deepEqual(routed,[]);
 });
 

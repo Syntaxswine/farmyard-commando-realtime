@@ -34,6 +34,8 @@ const V = (x=0,y=0,z=0) => new T.Vector3(x,y,z);
 // lifetime than the interval prevents identical paths merging into one beam.
 const BURST_SHOT_INTERVAL=140,BURST_TRACER_DURATION=90,FLASH_DURATION=72;
 const MUZZLE_SOURCE_TOLERANCE=.04;
+// Two standard Zoom Out steps from the previous 13 m view.
+const DEFAULT_CAMERA_SPAN=13*1.2**2;
 function disposeEffectMesh(mesh){
   if(!mesh)return;
   mesh.removeFromParent();mesh.geometry.dispose();mesh.material.dispose();
@@ -53,7 +55,7 @@ export class FieldView {
     container.append(this.renderer.domElement);
     this.scene=new T.Scene();this.scene.fog=new T.Fog(0x17241e,38,75);
     this.daylight=new DaylightRig(this.scene,this.renderer);this.daylight.sun.shadow.mapSize.set(1024,1024);
-    this.camera=new T.OrthographicCamera();this.target=V(5,0,24);this.span=13;this.requestedSpan=13;this.follow=true;
+    this.camera=new T.OrthographicCamera();this.target=V(5,0,24);this.span=this.requestedSpan=DEFAULT_CAMERA_SPAN;this.follow=true;
     this.ray=new T.Raycaster();this.plane=new T.Plane(V(0,1,0),0);
     this.environment=new T.Group();this.scene.add(this.environment);
     this.actors=new Map();this.parkedActors=new Map();this.data=new Map();this.pending=new Map();this.failed=new Set();this.generation=0;this.samples=new Map();this.effects=[];
@@ -122,7 +124,7 @@ export class FieldView {
     this.effects=[];this.flameEffects?.dispose();this.flameEffects=null;this.flameCone?.dispose();this.flameCone=null;this.flameAim=null;this.lastEffect=null;
   }
   clearGestures(){for(const id of this.pointers.keys())if(this.container.hasPointerCapture(id))this.container.releasePointerCapture(id);this.pointers.clear();this.gesture=null;this.pinch=null;this.grenadeCamera=null;this.flameAim=null;this.flameCone?.hide();this.returnSpan=null;this.focusedId=null;}
-  setGame(s){this.generation++;this.clearGestures();this.clearEffects();this.span=this.requestedSpan=13;this.state=s;this.residentWindow=null;this.lastWindowKey=null;this.samples.clear();this.failed.clear();for(const a of [...this.actors.values(),...(this.parkedActors?.values()||[])])this.disposeActor(a);this.actors.clear();this.parkedActors?.clear();this.pending.clear();this.clearEnvironment();this.buildEnvironment(s);this.center();this.resize();this.lastRevision=-1;this.lastLightAt=undefined;this.lastFrameAt=undefined;this.lastEffect=s.effect||null;this.route([]);}
+  setGame(s){this.generation++;this.clearGestures();this.clearEffects();this.span=this.requestedSpan=DEFAULT_CAMERA_SPAN;this.state=s;this.residentWindow=null;this.lastWindowKey=null;this.samples.clear();this.failed.clear();for(const a of [...this.actors.values(),...(this.parkedActors?.values()||[])])this.disposeActor(a);this.actors.clear();this.parkedActors?.clear();this.pending.clear();this.clearEnvironment();this.buildEnvironment(s);this.center();this.resize();this.lastRevision=-1;this.lastLightAt=undefined;this.lastFrameAt=undefined;this.lastEffect=s.effect||null;this.route([]);}
   reportLoading(){this.onLoading(this.artBusy||this.propBusy||this.missionArtBusy||this.missionPaperBusy||this.pending.size>0||this.failed.size>0);}
   // Mission art owns its geometry; detach it before the generic traversal below.
   clearEnvironment(){this.guardSight?.dispose();this.guardSight=null;this.windowArt?.dispose();this.windowArt=null;this.windowEffects?.dispose();this.windowEffects=null;this.searchHalo?.dispose();this.searchHalo=null;this.missionArt?.dispose();this.missionArt=null;this.missionArtBusy=this.missionPaperBusy=false;this.interactionArt?.dispose();this.interactionArt=null;this.art?.dispose();this.art=null;this.environment.traverse(o=>{o.geometry?.dispose();if(o.material){for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();}});this.environment.clear();for(const t of this.disposables)t.dispose();this.disposables=[];}

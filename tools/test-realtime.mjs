@@ -83,6 +83,17 @@ try{
   assert.deepEqual(new Set(start.guards.map(g=>g.weapon)),new Set(['pistol','smg','rifle','shotgun']));
   assert(start.guards.every(g=>g.maxHp===Math.round(start.player.hp/2)&&g.firearms===Math.round(start.player.stats.firearms/2)));
   assert(start.guards.some(g=>g.patrolPoints===2)&&start.guards.some(g=>g.patrolPoints>2));
+  const zoomOut=page.getByRole('button',{name:'Zoom out',exact:true}),zoomIn=page.getByRole('button',{name:'Zoom in',exact:true});
+  const [outBox,inBox]=await Promise.all([zoomOut.boundingBox(),zoomIn.boundingBox()]);
+  assert(outBox&&inBox&&outBox.y<inBox.y);
+  const defaultSpan=(await townSnapshot(page)).camera.span;
+  assert(Math.abs(defaultSpan-18.72)<.001);
+  await zoomOut.click();
+  const widerSpan=(await townSnapshot(page)).camera.span;
+  assert(Math.abs(widerSpan-22.464)<.001);
+  await zoomIn.click();
+  assert(Math.abs((await townSnapshot(page)).camera.span-widerSpan*.83)<.001);
+  mark('Mount Dora starts two steps wider with Zoom Out above Zoom In');
   const sneak=page.getByRole('button',{name:'Sneak',exact:true});
   assert.equal(await sneak.getAttribute('aria-pressed'),'false');
   assert.equal(await sneak.getAttribute('data-stealth'),'clear');
