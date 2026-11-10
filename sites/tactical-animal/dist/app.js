@@ -238,6 +238,7 @@ function useInteraction(id,action,itemId=null){
   resetStick();keys.clear();const result=Core.performInteraction(state,id,action,itemId);
   if(!result.ok){toast(result.reason);renderBattle();return;}
   selected=null;view.route([]);contextKey='';renderBattle();storage.write();
+  if (action === 'take-all') return;
   if(result.loot)lootWindow(id);
   else if(result.message)showDialog(`<p class="eyebrow">FIELD NOTES</p><h2>${safe(result.name)}</h2><p>${safe(result.message)}</p>`,[['Return to operation',()=>{},'primary'],['Mission & combat log',mission]]);
 }

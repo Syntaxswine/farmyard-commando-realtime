@@ -91,16 +91,21 @@ test('resuming an older save with empty loot leaves both objects present without
   }
 });
 
-test('an opted-in chest still opens and closes after its final transfer', () => {
+test('Take all closes the menu while a reusable chest remains available', () => {
   const state = createSoloGame();
   const chest = state.interactables.find(object => object.kind === 'chest');
   chest.allowEmptyInteraction = true;
   const a = app({realTime: true, initialState: state});
   a.el('interaction-hand').click();
   action(a, 'Take all').click();
+  assert.equal(a.el('overlay').open, false);
+  assert.equal(a.el('interaction-hand').hidden, false);
+  assert.equal(a.el('interaction-label').textContent, 'Loot');
+  assert.equal(hasHalo(a, chest.id), false);
+
+  a.el('interaction-hand').click();
   assert.equal(a.el('overlay').open, true);
   assert.equal(action(a, 'Take all').disabled, true);
-  assert.equal(hasHalo(a, chest.id), false);
 
   action(a, 'Close chest').click();
   assert.equal(chest.open, false);
