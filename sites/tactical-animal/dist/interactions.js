@@ -2,6 +2,15 @@ import {WALL_DIMENSIONS} from './world-dimensions.js';
 import {DEFAULT_MISSION_ID,missionForState,missionInteractables,objectiveSecured} from './missions.js';
 export {missionInteractables} from './missions.js';
 
+export function hasLootContents(object) {
+  return (object.kind === 'chest' || object.kind === 'body') && object.inventory?.length > 0;
+}
+
+function offersLootActions(object) {
+  // An authored chest may opt in to Open, Loot and Close when empty.
+  return hasLootContents(object) || (object.kind === 'chest' && object.allowEmptyInteraction === true);
+}
+
 // The open leaf stays solid, tucked along the inside of its doorway.
 export function doorFootprint(object,open=object.open){
   const {length,thickness,height}=WALL_DIMENSIONS,half=length/2,t=thickness/2;
@@ -63,9 +72,15 @@ export function createInteractionSystem({hero,canControl,combatCosts,distance,ge
   function actions(state,object){
     const action=(id,label,base)=>({id,label,cost:cost(state,base)});
     if(object.kind==='door')return [action(object.open?'close':'open',object.open?'Close':'Open',1)];
-    if(object.kind==='chest')return object.open?
-      [action('loot','Loot',0),action('close','Close',1)]:[action('open','Open',2)];
-    if(object.kind==='body')return [action(object.searched?'loot':'search',object.searched?'Loot':'Search',object.searched?0:2)];
+    if (object.kind === 'chest' || object.kind === 'body') {
+      if (!offersLootActions(object)) return [];
+      if (object.kind === 'body') {
+        return object.searched ? [action('loot', 'Loot', 0)] : [action('search', 'Search', 2)];
+      }
+      return object.open
+        ? [action('loot', 'Loot', 0), action('close', 'Close', 1)]
+        : [action('open', 'Open', 2)];
+    }
     if(object.kind==='clue')return [{id:'inspect',label:'Inspect',cost:0}];
     return [action(object.kind==='extract'?'extract':'collect',object.kind==='extract'?'Extract':'Collect',object.kind==='extract'?0:object.cost)];
   }
@@ -78,13 +93,21 @@ export function createInteractionSystem({hero,canControl,combatCosts,distance,ge
     else if(!canControl(state,unit))reason='Wait for your turn.';
     else if(object.kind==='extract'&&!objectiveSecured(state))reason='Secure the '+missionForState(state).objective.name.toLowerCase()+' first.';
     else if(!accessible(state,object))reason='Move within clear reach of the object.';
-    else if(['take','take-all'].includes(actionId)&&(!object.inventory.length||actionId==='take'&&!object.inventory.some(item=>item.id===itemId)))reason='There is nothing to take.';
+    else if(['take','take-all'].includes(actionId)&&(!hasLootContents(object)||actionId==='take'&&!object.inventory.some(item=>item.id===itemId)))reason='There is nothing to take.';
     else if(object.kind==='door'&&['open','close'].includes(actionId)&&state.units.some(other=>other.hp>0&&pointBoxDistance(other,doorFootprint(object,actionId==='open'))<radius+epsilon))reason='Someone is in the doorway.';
     else if(unit.ap+epsilon<action.cost)reason='Not enough AP.';
     return {ok:!reason,reason,cost:action?.cost||0,action,object};
   }
   function nearby(state){
-    return objects(state).filter(object=>accessible(state,object)).map(object=>({...object,distance:distance(hero(state),object),actions:actions(state,object).map(action=>({...action,...preview(state,object.id,action.id),object:undefined}))}));
+    return objects(state).flatMap(object => {
+      const available = actions(state, object);
+      if (!available.length || !accessible(state, object)) return [];
+      return [{
+        ...object,
+        distance: distance(hero(state), object),
+        actions: available.map(action => ({...action, ...preview(state, object.id, action.id), object: undefined})),
+      }];
+    });
   }
   function addItem(state,item){
     const unit=hero(state);
@@ -117,7 +140,8 @@ export function createInteractionSystem({hero,canControl,combatCosts,distance,ge
     else if(actionId==='take'||actionId==='take-all'){
       const items=stored.inventory.filter(item=>actionId==='take-all'||item.id===itemId);
       for(const item of items)addItem(state,item);
-      stored.inventory=stored.inventory.filter(item=>!items.includes(item));loot=true;
+      stored.inventory=stored.inventory.filter(item=>!items.includes(item));
+      loot = offersLootActions(stored);
       log(state,`Took ${actionId==='take-all'?'all items':'an item'} from ${object.name} (${check.cost} AP).`);
     }else if(actionId==='collect'){
       const mission=missionForState(state);state.solo.objectives[mission.objective.id]=true;
