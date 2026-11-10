@@ -49,7 +49,24 @@ for(const f of source.features.filter(f=>f.category==='building')){
  const treatment={type,wall:isInn?'yellow-siding':shop?(seed%2?'brick':'plaster'):p[0],trim:'cream-siding',roof:isInn?'brown-shingle':shop?'slate':p[1],roofStyle:shop?'flat':seed%3?'gable':'hip',tint:isInn?[1,1,.9]:p[2],stories,pitch:shop?0:22+seed%9,windowSpacing:shop?3.3:3.8,veranda:isInn&&['osm-way-560095890','osm-way-560095893'].includes(f.id)};
  if(hero){Object.assign(treatment,{type:hero,wall:hero==='donnelly-house'?'cream-siding':hero==='former-depot'?'cream-siding':'brick',roof:hero==='donnelly-house'?'green-metal':'slate',roofStyle:hero==='shamrock-building'?'flat':hero==='former-depot'?'hip':'gable',pitch:28,veranda:hero==='donnelly-house'});}
  if(hero==='donnelly-house')Object.assign(treatment,{wall:'yellow-siding',roof:'blue-metal',roofFinish:'silver',roofRiseLimit:2.2,crossGable:true,ornate:true,frontGables:[.3,.65].map(t=>insetCorner(f,2.2,[f.bounds[2],f.bounds[1]+(f.bounds[3]-f.bounds[1])*t])),turret:{centre:insetCorner(f,1.8),radius:1.5,stories:3,capRiseFactor:1.3,placement:'inferred-inset-southeast-corner; not surveyed'}});
- if(hero==='former-depot')Object.assign(treatment,{roof:'blue-metal',roofFinish:'silver',pitch:10});
+ if(hero==='former-depot'){
+  const [west,north,east,south]=f.bounds, [polygon,...other]=f.geometry.coordinates;
+  const [ring,...holes]=polygon;
+  if(other.length||holes.length||ring.length!==5||
+     ring.slice(0,-1).some(([x,z],i)=>!(x===west||x===east)||!(z===north||z===south)||x!==ring[i+1][0]&&z!==ring[i+1][1]))
+    throw Error('The reviewed depot facade requires an axis-aligned rectangular footprint.');
+  Object.assign(treatment,{
+   wallFinish:'painted-white',roof:'slate',roofFinish:'stamped-tin',pitch:26,tint:[1,1,.98],
+   depot:{
+    // The west and south eaves finish at the wall face beside the service lane.
+    eaveOverhang:[.08,.4,.4,.08],chimney:[.53,.71],
+    // Fractions along the east wall (north to south) and south wall (east to west).
+    eastSashes:[[.16,.78],[.43,.8],[.55,.8],[.67,.72]],
+    southSashes:[[.35,1],[.72,.53],[.85,.53]],
+    eastTrim:[.29,.36,.77,.89]
+   }
+  });
+ }
  if(hero==='shamrock-building')Object.assign(treatment,{baseWall:'plaster',archedLowerWindows:true,cornice:true});
  if(isInn&&['osm-way-560095892','osm-way-560095898'].includes(f.id))Object.assign(treatment,{wall:'plaster',roofStyle:'flat',tint:[1,.96,.8],annex:true});
  // Hand-authored heroes and the Inn keep their curated treatments.
@@ -59,7 +76,13 @@ for(const f of source.features.filter(f=>f.category==='building')){
  const polygons=f.geometry.coordinates;
  output.push({id:f.id,kind:'building',sourceIds:[f.id],anchor:a,bounds:expand(f.bounds,.5),polygons,treatment,seed,collisionPolicy:'retain-source-walls',solids:[{kind:'polygon',polygons}],replacesSourceIds:[f.id],provenance:{footprint:f.county?'grid-generalized county sketch placed on its 2018 lidar roof (reference/county-buildings.json); original geographicGeometry retained':'grid-generalized-osm; original geographicGeometry retained',treatment:isInn?'observed-group-palette-inferred-details':['donnelly-house','former-depot'].includes(hero)?'observed-typology-inferred-details':'inferred-local-typology',height:isInn?'two-native-storey-approximation-city-documents-2-to-3-storey-complex':hero==='donnelly-house'?'native-two-storey-queen-anne-approximation':f.nativeProxy.storiesSource,details:'Repeated windows, roof form and facade divisions are approximations; no surveyed doors or interiors.',sourceRefs:isInn?['city-historic-sites','lakeside-owner','lakeside-history']:['city-preservation','city-historic-sites']}});
  if(evidence)output.at(-1).provenance.evidence={...evidence.why,colour:'seeded placeholder until surveyed'};
- if(hero||isInn){const p=output.at(-1);p.provenance.sourceRefs.push('city-design-standards-2025');p.provenance.observedFeatures=hero==='donnelly-house'?'PDF76: yellow siding, white decorative veranda, silver stamped-tin roof, polygonal tower and multiple gables':hero==='shamrock-building'?'PDF84 historical image: brick upper facade, pale pilasters, arched lower windows, cornice; current three floors derive from OSM':hero==='former-depot'?'PDF82: white siding and low gray hipped roof':isInn?'PDF84 historical veranda/arched supports; current owner yellow/white group':'Facade remains inferred; no individual photo matched.';}
+ if(hero==='former-depot'){
+  const provenance=output.at(-1).provenance;
+  provenance.sourceRefs.push('depot-street-view-2025','depot-national-register','depot-chamber');
+  provenance.treatment='observed-street-and-south-facades';
+  provenance.details='Window spacing, eave projection and chimney position are visual approximations fitted to the snapped plan. Roof pitch uses the 2018 lidar estimate. Street entrances are recorded separately for an operational-door pass.';
+ }
+ if(hero||isInn){const p=output.at(-1);p.provenance.sourceRefs.push('city-design-standards-2025');p.provenance.observedFeatures=hero==='donnelly-house'?'PDF76: yellow siding, white decorative veranda, silver stamped-tin roof, polygonal tower and multiple gables':hero==='shamrock-building'?'PDF84 historical image: brick upper facade, pale pilasters, arched lower windows, cornice; current three floors derive from OSM':hero==='former-depot'?'Street View May 2025: white lap siding, dark fascia and vertical trim, bright stamped-metal hip roof, brick chimney, tall east sashes and grouped south windows':isInn?'PDF84 historical veranda/arched supports; current owner yellow/white group':'Facade remains inferred; no individual photo matched.';}
 }
 const feature=n=>{const f=byId.get('osm-way-'+n);if(!f)throw Error('Missing source '+n);return f;};
 function polygonRecord(id,kind,points,sourceIds,treatment,provenance={}){const bounds=bound(points),a=centre(bounds);const p={id,kind,sourceIds,anchor:a,bounds:expand(bounds,.15),points,treatment,collisionPolicy:'additional-solids',solids:[],replacesSourceIds:[],provenance};output.push(p);return p;}

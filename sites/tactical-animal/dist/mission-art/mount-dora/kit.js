@@ -36,11 +36,14 @@ export function createMountDoraArt({THREE:T,atlas=null}={}){
  root.name='mount-dora-art';root.userData={artRevision:ART_REVISION,coordinates:'town east/south metres',metresPerUnit:1};
  function material(id,tint=[1,1,1],repeat=false,finish=null){
   const key=id+':'+tint+':'+repeat+(finish?':'+finish:'');if(pool.has(key))return pool.get(key);
-  const glass=id==='glass',m=new T.MeshStandardMaterial({color:glass?0x59726e:new T.Color(...tint),map:glass?null:sampler,roughness:glass?.32:finish==='silver'?.6:.93,metalness:finish==='silver'?.28:0,side:T.DoubleSide,vertexColors:repeat,transparent:false});m.name='md:'+key;
+  const glass=id==='glass',metal=finish==='silver'||finish==='stamped-tin';
+  const luminance={silver:[.15,.75],'stamped-tin':[.58,.42],'painted-white':[.56,.44]}[finish];
+  const m=new T.MeshStandardMaterial({color:glass?0x59726e:new T.Color(...tint),map:glass?null:sampler,roughness:glass?.32:metal?.6:.93,metalness:finish==='silver'?.28:metal?.16:0,side:T.DoubleSide,vertexColors:repeat,transparent:false});m.name='md:'+key;
   if(atlas&&!glass){const tile=tiles.get(id)??0,offset=[(tile%4)/4,(3-Math.floor(tile/4))/4],scale=.976/4;
-   m.onBeforeCompile=s=>{const phase=repeat?`vec2(${offset}) + vec2(.003) + fract(vMapUv) * ${scale}`:'vMapUv',derivative=repeat?` * ${scale}`:'';s.fragmentShader=s.fragmentShader.replace('#include <map_fragment>',`#ifdef USE_MAP\nvec2 mdDx = dFdx(vMapUv)${derivative};\nvec2 mdDy = dFdy(vMapUv)${derivative};\nvec2 mdSafe = min(vec2(.12), max(abs(mdDx),abs(mdDy)) * 2.0 + vec2(.004));\nvec2 mdUV = clamp(${phase}, vec2(${offset}) + mdSafe, vec2(${offset}) + vec2(.25) - mdSafe);\nvec4 mdPaint = textureGrad(map, mdUV, mdDx, mdDy);\n${finish==='silver'?'mdPaint.rgb = vec3(.15 + dot(mdPaint.rgb, vec3(.2126,.7152,.0722)) * .75);':''}\ndiffuseColor *= mdPaint;\n#endif`);};m.customProgramCacheKey=()=>`md-atlas-safe:${tile}:${repeat}:${finish}`;
+   m.onBeforeCompile=s=>{const phase=repeat?`vec2(${offset}) + vec2(.003) + fract(vMapUv) * ${scale}`:'vMapUv',derivative=repeat?` * ${scale}`:'';s.fragmentShader=s.fragmentShader.replace('#include <map_fragment>',`#ifdef USE_MAP\nvec2 mdDx = dFdx(vMapUv)${derivative};\nvec2 mdDy = dFdy(vMapUv)${derivative};\nvec2 mdSafe = min(vec2(.12), max(abs(mdDx),abs(mdDy)) * 2.0 + vec2(.004));\nvec2 mdUV = clamp(${phase}, vec2(${offset}) + mdSafe, vec2(${offset}) + vec2(.25) - mdSafe);\nvec4 mdPaint = textureGrad(map, mdUV, mdDx, mdDy);\n${luminance?`mdPaint.rgb = vec3(${luminance[0]} + dot(mdPaint.rgb, vec3(.2126,.7152,.0722)) * ${luminance[1]});`:''}\ndiffuseColor *= mdPaint;\n#endif`);};m.customProgramCacheKey=()=>`md-atlas-safe:${tile}:${repeat}:${finish}`;
   }else if(!atlas&&!glass){const colors={plaster:0xddd5bf,'cream-siding':0xe2dac3,'sage-siding':0x84917e,'yellow-siding':0xe3c365,brick:0x9b604a,slate:0x535d60,'brown-shingle':0x74614b,'green-metal':0x4a695d,'red-timber':0x9e3e31,wood:0x9e8059,'dark-wood':0x594b3c,concrete:0xbcb7a8};m.color.multiply(new T.Color(colors[id]??0xc9c4b1));}
-  if(!atlas&&finish==='silver')m.color.set(0xbcc2be);pool.set(key,m);return m;
+  if(!atlas&&luminance)m.color.set(finish==='silver'?0xbcc2be:finish==='stamped-tin'?0xdce1e2:0xece9e0);
+  pool.set(key,m);return m;
  }
  function addMesh(group,g,m,role='body'){const o=new T.Mesh(g,m);o.castShadow=o.receiveShadow=true;o.userData.occlusionRole=role;group.add(o);return o;}
  function box(group,at,size,id='cream-siding',yaw=0){const g=new T.BoxGeometry(...size),tile=tiles.get(id)??0,uv=g.attributes.uv;for(let i=0;i<uv.count;i++)uv.setXY(i,(tile%4+.012+uv.getX(i)*.976)/4,(3-Math.floor(tile/4)+.012+uv.getY(i)*.976)/4);const o=addMesh(group,g,material(id));o.position.fromArray(at);o.rotation.y=yaw;return o;}
@@ -79,18 +82,63 @@ export function createMountDoraArt({THREE:T,atlas=null}={}){
    if(t.archedLowerWindows){const n=Math.floor((len-.8)/t.windowSpacing);for(let j=0;j<n;j++){const q=mix(a,b,(j+1)/(n+1));const s=new T.Shape();s.moveTo(-.775,0);for(let k=0;k<=12;k++){const angle=Math.PI-k*Math.PI/12;s.lineTo(Math.cos(angle)*.775,Math.sin(angle)*.37);}s.closePath();const o=addMesh(group,new T.ShapeGeometry(s),material('glass'));o.position.set(q[0],1.44,q[1]);o.rotation.y=yaw;arch(group,[q[0],1.44,q[1]],1.55,.37,yaw);for(const sign of [-1,1]){const u=(j+1)/(n+1)+sign*1.12/len,c=mix(a,b,u);box(group,[c[0],.98,c[1]],[.22,1.96,.22]);}}}
    if(t.cornice){for(const [y,h,d]of [[2.06,.18,.3],[t.stories*2.12-.12,.18,.26],[t.stories*2.12+.08,.15,.35]])box(group,[(a[0]+b[0])/2,y,(a[1]+b[1])/2],[len,h,d],'cream-siding',yaw);}
   }}
+ function facadeWindows(t,a,b,length){
+  let bottom=.65,top=1.65,sashes;
+  if(t.depot&&a[0]===b[0]&&a[0]>0){
+   sashes=t.depot.eastSashes;
+   bottom=.37;top=1.77;
+  }else if(t.depot&&a[1]===b[1]&&a[1]>0){
+   sashes=t.depot.southSashes;
+   bottom=.84;top=1.68;
+  }else{
+   const count=Math.floor((length-.8)/t.windowSpacing),width=t.type==='commercial'?1.7:.86;
+   sashes=Array.from({length:count},(_,i)=>[(i+1)/(count+1),width]);
+  }
+  return sashes.map(([along,width])=>({type:'window',u0:length*along-width/2,u1:length*along+width/2,bottom,top}));
+ }
+ function depotRoof(group,polygons,t,seed){
+  const {eaveOverhang,chimney,eastTrim}=t.depot,wall=polygons[0][0];
+  const [westOverhang,northOverhang,eastOverhang,southOverhang]=eaveOverhang;
+  const xs=wall.map(q=>q[0]),zs=wall.map(q=>q[1]);
+  const west=Math.min(...xs),north=Math.min(...zs),east=Math.max(...xs),south=Math.max(...zs);
+  const eaves=wall.map(([x,z])=>[x+(x<0?-westOverhang:eastOverhang),z+(z<0?-northOverhang:southOverhang)]);
+  roof(group,[[eaves]],t,t.stories,seed);
+
+  const eaveY=t.stories*2.12,fascia=eaves.map(([x,z])=>[x-Math.sign(x)*.04,z-Math.sign(z)*.04]);
+  for(const [ring,y,height,role] of [[fascia,eaveY-.06,.12,'roof'],[wall,.07,.14,'body']]){
+   for(let i=1;i<ring.length;i++){
+    const [a,b]=[ring[i-1],ring[i]],dx=b[0]-a[0],dz=b[1]-a[1];
+    const strip=box(group,[(a[0]+b[0])/2,y,(a[1]+b[1])/2],[Math.hypot(dx,dz)+.08,height,.08],'dark-wood',-Math.atan2(dz,dx));
+    strip.userData.occlusionRole=role;
+   }
+  }
+  for(const along of eastTrim){
+   box(group,[east+.08,1.05,north+(south-north)*along],[.07,1.9,.16],'dark-wood');
+  }
+
+  const x=west+(east-west)*chimney[0],z=north+(south-north)*chimney[1];
+  const slope=Math.tan(t.pitch*Math.PI/180);
+  const rise=Math.min(x-west+westOverhang,east-x+eastOverhang,z-north+northOverhang,south-z+southOverhang)*slope;
+  const top=eaveY+rise+.65;
+  for(const [y,size] of [[top-.65,[.62,1.3,.7]],[top,[.76,.12,.84]]]){
+   box(group,[x,y,z],size,'brick').userData.occlusionRole='roof';
+  }
+ }
  function building(group,p){
   const polygons=localPolygons(p),t=p.treatment,floors=[];
-  for(let level=0;level<t.stories;level++){const walls=[];for(const [pi,polygon]of polygons.entries())for(const [ri,ring]of polygon.entries()){const loop=closed(ring),area=loop.reduce((n,a,i)=>{const b=loop[(i+1)%loop.length];return n+a[0]*b[1]-b[0]*a[1];},0),reverse=(area>0)!==(ri===0);for(let i=0;i<loop.length;i++){if(p.suppressedWallEdges.some(e=>e[0]===pi&&e[1]===ri&&e[2]===i))continue;let a=loop[i],b=loop[(i+1)%loop.length];if(reverse)[a,b]=[b,a];const length=Math.hypot(b[0]-a[0],b[1]-a[1]);if(length<1e-5)continue;const openings=[],count=Math.floor((length-.8)/t.windowSpacing);for(let j=0;j<count;j++){const middle=length*(j+1)/(count+1),width=t.type==='commercial'?1.7:.86;openings.push({type:'window',u0:middle-width/2,u1:middle+width/2,bottom:.65,top:1.65});}walls.push({id:p.id+':'+level+':'+walls.length,a,b,length,level,interior:false,openings});}}
+  for(let level=0;level<t.stories;level++){const walls=[];for(const [pi,polygon]of polygons.entries())for(const [ri,ring]of polygon.entries()){const loop=closed(ring),area=loop.reduce((n,a,i)=>{const b=loop[(i+1)%loop.length];return n+a[0]*b[1]-b[0]*a[1];},0),reverse=(area>0)!==(ri===0);for(let i=0;i<loop.length;i++){if(p.suppressedWallEdges.some(e=>e[0]===pi&&e[1]===ri&&e[2]===i))continue;let a=loop[i],b=loop[(i+1)%loop.length];if(reverse)[a,b]=[b,a];const length=Math.hypot(b[0]-a[0],b[1]-a[1]);if(length<1e-5)continue;const openings=facadeWindows(t,a,b,length);walls.push({id:p.id+':'+level+':'+walls.length,a,b,length,level,interior:false,openings});}}
    floors.push({level,height:level*2.12,cells:[],holes:[],walls});
   }
   if(t.archedLowerWindows)for(const w of floors[0].walls)for(const o of w.openings){const mid=(o.u0+o.u1)/2;o.u0=mid-.775;o.u1=mid+.775;o.bottom=.18;o.top=1.44;}
   const b={id:p.id,refs:p.sourceIds,wall:t.wall,baseWall:t.baseWall,trim:t.trim,roof:t.roof,tint:t.tint,stories:t.stories,pitch:.1,layout:'exterior',floors,stairs:[],parts:[{x:0,z:0,w:2,d:2,stories:t.stories,roof:'flat'}]};
   if(t.turret)b.tower={x:t.turret.centre[0]-p.anchor[0],z:t.turret.centre[1]-p.anchor[1],r:t.turret.radius,stories:t.turret.stories};
   const native=createBuildingModel(T,b,{atlas,lod:'game'});
-  for(const o of [...native.root.children]){if(['roof','details'].includes(o.userData.kind)){o.geometry.dispose();native.root.remove(o);}else{const id=o.userData.materialId;o.material=material(id==='interior'?'plaster':id,id===t.wall?t.tint:[1,1,1],false,id===t.roof?t.roofFinish:null);if(t.turret&&o.userData.kind==='tower'&&id===t.roof){const pos=o.geometry.attributes.position,normal=o.geometry.attributes.normal,base=t.turret.stories*2.12-.12;for(let i=0;i<pos.count;i++){pos.setY(i,base+(pos.getY(i)-base)*t.turret.capRiseFactor);const n=new T.Vector3(normal.getX(i),normal.getY(i)/t.turret.capRiseFactor,normal.getZ(i)).normalize();normal.setXYZ(i,...n.toArray());}}}}
+  for(const o of [...native.root.children]){if(['roof','details'].includes(o.userData.kind)){o.geometry.dispose();native.root.remove(o);}else{const id=o.userData.materialId;o.material=material(id==='interior'?'plaster':id,id===t.wall?t.tint:[1,1,1],false,id===t.wall?t.wallFinish:id===t.roof?t.roofFinish:null);if(t.turret&&o.userData.kind==='tower'&&id===t.roof){const pos=o.geometry.attributes.position,normal=o.geometry.attributes.normal,base=t.turret.stories*2.12-.12;for(let i=0;i<pos.count;i++){pos.setY(i,base+(pos.getY(i)-base)*t.turret.capRiseFactor);const n=new T.Vector3(normal.getX(i),normal.getY(i)/t.turret.capRiseFactor,normal.getZ(i)).normalize();normal.setXYZ(i,...n.toArray());}}}}
   for(const m of native.materials.values())m.dispose();group.add(native.root);
-  group.userData.nativeBuildingRenderer=true;roof(group,polygons,t,t.stories,p.seed);if(t.crossGable){const f=fit(polygons[0][0]);roof(group,polygons,{...t,roofAxis:f.hi[0]-f.lo[0]>=f.hi[1]-f.lo[1]?'y':'x'},t.stories,p.seed);}
+  group.userData.nativeBuildingRenderer=true;
+  if(t.depot)depotRoof(group,polygons,t,p.seed);
+  else roof(group,polygons,t,t.stories,p.seed);
+  if(t.crossGable){const f=fit(polygons[0][0]);roof(group,polygons,{...t,roofAxis:f.hi[0]-f.lo[0]>=f.hi[1]-f.lo[1]?'y':'x'},t.stories,p.seed);}
   if(t.turret){const x=t.turret.centre[0]-p.anchor[0],z=t.turret.centre[1]-p.anchor[1],top=t.turret.stories*2.12-.12;cylinder(group,[x,top,z],1.59,.11,'cream-siding',1.59,8);for(let i=0;i<8;i++){const a=i*Math.PI/4;box(group,[x+Math.cos(a)*1.5,top-.95,z+Math.sin(a)*1.5],[.09,1.9,.09]);}}
   for(const q of t.frontGables||[]){const x=q[0]-p.anchor[0],z=q[1]-p.anchor[1],points=[[x-1.6,z-1.3],[x+1.6,z-1.3],[x+1.6,z+1.3],[x-1.6,z+1.3],[x-1.6,z-1.3]],dormer=new T.Group();dormer.position.y=.8;group.add(dormer);roof(dormer,[[points]],{...t,roofAxis:'x',pitch:48},t.stories,p.seed);const base=t.stories*2.12+.8,peak=base+Math.tan(48*Math.PI/180)*1.3;for(const side of [-1,1]){const a=new T.Vector3(x+1.61,base,z+side*1.3),b=new T.Vector3(x+1.61,peak,z),delta=b.clone().sub(a),m=cylinder(group,a.clone().add(b).multiplyScalar(.5).toArray(),.045,delta.length());m.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),delta.normalize());}}
   // Veranda rhythm remains on the mapped exterior: no new unverified floor plan

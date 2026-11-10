@@ -179,8 +179,13 @@ The city design guide (PDF pages 76, 77, 82 and 84) was subsequently inspected.
 Donnelly House now has yellow siding, silver metal roof treatment, native
 polygonal corner tower, intersecting clipped gables and white veranda arches/rail
 detail. The turret position, dimensions and cross-gable arrangement are bounded
-inferences inside the unchanged footprint. The depot uses white siding and a
-low gray hip roof. Shamrock has pale lower pilasters, arched window trim and a
+inferences inside the unchanged footprint. At the former depot, the May 2025
+Street View frontage and south corner show white lap siding, dark eaves, tall
+street-facing sashes, grouped end windows and a brick chimney above a light
+stamped-metal hip roof. The roof pitch follows the 2018 lidar estimate. The
+visible details use approximate proportions fitted to the 13 × 30 m snapped
+shell. The recorded entrances still need the streamed town's operational door
+support. Shamrock has pale lower pilasters, arched window trim and a
 strong cornice based on the historical photograph; its three levels still come
 from the mapped source, not that photograph. The Inn receives veranda arches;
 the historical corner gazebo is not assigned an invented current footprint.

@@ -30,8 +30,12 @@ together, retaining both courtyard holes and all 30 shared-owner relationships.
 and collision. Each building retains its original `geographicGeometry` alongside
 its authored geometry in `features.json`. Straight downtown streets and their
 frontages now share whole-metre lines. Curved roads retain their authored bends.
-The depot moved with its street and is 6.75 m from its geographic centre. Its
-relocated facade still needs a field review.
+The depot moved with its street and is 6.75 m from its geographic centre.
+The relocated façade was reviewed against May 2025 Street View on November 10,
+2026. The east eave projects 0.4 m and leaves 4.6 m to the painted Alexander
+Street sidewalk. The south and west eaves finish at the wall face beside the
+service lane. The reviewed trim, roof and windows are documented in the
+[art sources](../art/mount-dora/production-sources.json).
 
 The lakefront adds 19 source-mapped piers raised 0.4 m on AFT timber trellises,
 including the reviewed Rusty Anchor T junction. The disused railway uses the

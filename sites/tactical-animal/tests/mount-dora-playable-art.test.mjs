@@ -35,6 +35,30 @@ test('native production geometry stays inside declared town bounds and is actual
  }
  const before=kit.metrics();assert.ok(before.evicted>20);assert.ok(before.created>before.resident);kit.updateResident([1400,1660,1440,1680]);kit.dispose();kit.dispose();assert.equal(released,totalTracked);assert.equal(borrowed,0);assert.equal(kit.metrics().geometries,0);assert.equal(kit.root.children.length,0);
 });
+test('the reviewed depot model clears the Alexander Street sidewalk and the service lane corner',()=>{
+ const p=PLACEMENTS.find(p=>p.id==='osm-way-557494933'),kit=createMountDoraArt({THREE:T});
+ kit.updateResident(p.bounds);
+ const depot=kit.root.getObjectByName(p.id);
+ const bounds=new T.Box3().setFromObject(depot,true);
+ const [west,north,east,south]=features.find(f=>f.id===p.id).bounds;
+ assert.ok(Math.abs(bounds.max.x-east-.4)<.001,'The street-facing eave overhangs the snapped wall by 0.4 m');
+ const roofBounds=new T.Box3();
+ for(const mesh of depot.children.filter(o=>o.userData.occlusionRole==='roof')){
+  roofBounds.expandByObject(mesh,true);
+ }
+ assert.ok(roofBounds.min.x>=west-.081&&roofBounds.max.z<=south+.081,'The eaves finish at the wall face beside the service lane');
+ const roof=depot.children.find(m=>m.material?.name.endsWith(':stamped-tin'));
+ const chimney=depot.children.find(m=>m.userData.occlusionRole==='roof'&&m.material?.name.startsWith('md:brick:'));
+ assert.ok(roof&&chimney&&new T.Box3().setFromObject(chimney).max.y>new T.Box3().setFromObject(roof).max.y);
+ const sector=JSON.parse(fs.readFileSync(new URL('../../../maps/mount-dora/sectors/B03.map.json',import.meta.url)));
+ for(let z=north;z<south;z++){
+  const row=sector.terrain[z-480];
+  const sidewalk=row.findIndex((tile,x)=>x+240>=east&&tile==='ground-concrete');
+  assert.ok(sidewalk>=0&&row[sidewalk+1]==='ground-concrete'&&row[sidewalk+2]==='ground-asphalt','The two-metre sidewalk runs parallel to the depot');
+  assert.ok(sidewalk+240-bounds.max.x>=4.59,'The rendered eave clears every sidewalk tile along the depot');
+ }
+ kit.dispose();
+});
 test('native roof clipping retains the original courtyard hole without rectangle fill',()=>{
  const p=PLACEMENTS.find(p=>p.id==='osm-relation-7980769'),kit=createMountDoraArt({THREE:T});kit.updateResident(p.bounds);const g=kit.root.getObjectByName(p.id);let topArea=0;
  for(const o of g.children.filter(o=>o.isMesh&&o.material.name.endsWith(':true'))){const a=o.geometry.attributes.position,n=o.geometry.attributes.normal,indices=o.geometry.index;for(let i=0;i<(indices?.count??a.count);i+=3){const ids=[0,1,2].map(k=>indices?indices.getX(i+k):i+k);if(n.getY(ids[0])<.01)continue;const q=ids.map(i=>[a.getX(i),a.getZ(i)]);topArea+=Math.abs((q[1][0]-q[0][0])*(q[2][1]-q[0][1])-(q[1][1]-q[0][1])*(q[2][0]-q[0][0]))/2;}}

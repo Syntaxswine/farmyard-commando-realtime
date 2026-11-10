@@ -33,14 +33,12 @@ item says where it lives and how it was measured.
   than main's. South Tremain moves 12 m over 26 m, a 25° kink where its source
   moves 5 m; South Highland moves 11 m over 99 m. With houses placed from
   their streets, each street could take one line and its houses turn with it.
-- **Re-review.** These plans moved since review and need a look in the
-  production game:
-  - the three reviewed plans (`needsReview` in `authored-buildings.json`):
-    - the former depot `osm-way-557494933`, now 6.753 m from its geographic
-      centre (6.195 m when reviewed);
-    - `osm-way-1240419485`;
-    - `osm-way-1240419511`;
-  - the diamond-shaped house `osm-way-560095904`, below.
+- **Re-review.** The `needsReview` fields in `authored-buildings.json` record
+  plans that moved after their first review. The former depot, now 6.753 m
+  from its geographic centre (6.195 m at the first review), received a façade
+  and sidewalk review on November 10, 2026. See the [walking tour notes](../mount-dora-playable.md).
+  `osm-way-1240419485`, `osm-way-1240419511` and the diamond-shaped house
+  `osm-way-560095904` below still need a look in the production game.
 
 ## The lakefront against the lidar
 
