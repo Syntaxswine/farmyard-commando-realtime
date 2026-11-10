@@ -11,7 +11,7 @@ import {GrenadeAim,fieldCameraFor,screenToGround} from './grenade-controls.js';
 import {FlameAim} from './flame-controls.js';
 import {weaponArtwork} from './original-art.js';
 import {STANCE_ICONS} from './aft/tactics/battle-control-icons.js';
-import {selectInteractionTarget} from './interactions.js';
+import {isExhaustedLoot,selectInteractionTarget} from './interactions.js';
 import {aimOptions,availableAim,flashAPShortage,switchSymbol} from './shooting-controls.js';
 import {createTargetMonitor} from './targeting-monitor.js';
 import {createOperationStorage} from './operation-storage.js';
@@ -226,7 +226,11 @@ function renderInteractionHand(){
   positionInteractionHand();
 }
 function focusInteraction(id){
-  if(!Core.nearbyInteractions(state).some(object=>object.id===id)){toast('Move within clear reach of the object.');return;}
+  if(!Core.nearbyInteractions(state).some(object=>object.id===id)){
+    const object=Core.interactionObjects(state).find(object=>object.id===id);
+    if(object&&isExhaustedLoot(object))return;
+    toast('Move within clear reach of the object.');return;
+  }
   resetStick();keys.clear();Core.stop(state);selected=null;view.route([]);interactionFocus=id;renderBattle();
 }
 function useInteraction(id,action,itemId=null){

@@ -6,9 +6,10 @@ export function hasLootContents(object) {
   return (object.kind === 'chest' || object.kind === 'body') && object.inventory?.length > 0;
 }
 
-function offersLootActions(object) {
+export function isExhaustedLoot(object) {
   // An authored chest may opt in to Open, Loot and Close when empty.
-  return hasLootContents(object) || (object.kind === 'chest' && object.allowEmptyInteraction === true);
+  return (object.kind === 'chest' || object.kind === 'body') && !hasLootContents(object) &&
+    !(object.kind === 'chest' && object.allowEmptyInteraction === true);
 }
 
 // The open leaf stays solid, tucked along the inside of its doorway.
@@ -73,7 +74,7 @@ export function createInteractionSystem({hero,canControl,combatCosts,distance,ge
     const action=(id,label,base)=>({id,label,cost:cost(state,base)});
     if(object.kind==='door')return [action(object.open?'close':'open',object.open?'Close':'Open',1)];
     if (object.kind === 'chest' || object.kind === 'body') {
-      if (!offersLootActions(object)) return [];
+      if (isExhaustedLoot(object)) return [];
       if (object.kind === 'body') {
         return object.searched ? [action('loot', 'Loot', 0)] : [action('search', 'Search', 2)];
       }
@@ -141,7 +142,7 @@ export function createInteractionSystem({hero,canControl,combatCosts,distance,ge
       const items=stored.inventory.filter(item=>actionId==='take-all'||item.id===itemId);
       for(const item of items)addItem(state,item);
       stored.inventory=stored.inventory.filter(item=>!items.includes(item));
-      loot = offersLootActions(stored);
+      loot = !isExhaustedLoot(stored);
       log(state,`Took ${actionId==='take-all'?'all items':'an item'} from ${object.name} (${check.cost} AP).`);
     }else if(actionId==='collect'){
       const mission=missionForState(state);state.solo.objectives[mission.objective.id]=true;

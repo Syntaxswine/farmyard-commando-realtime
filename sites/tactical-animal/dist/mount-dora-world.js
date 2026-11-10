@@ -4,6 +4,7 @@ import {blockWindow} from './world-grid.js';
 import {trunkDistance,trunkSpan} from './trunk-geometry.js';
 import {MATURE_TREE_SCALE} from './aft/tactics/biome-foliage-data.js';
 import {groundHash} from './aft/tactics/biome-ground-composition.js';
+import {maturePinesForSector,MATURE_PINE_STYLES} from './mount-dora-pines.js';
 import {patrolError} from './aft/tactics/character-patrol.js';
 import {woodlandDepth} from './designer/a20b343a0234/tactics/core/woodland.js';
 import {foliageDepth} from './designer/a20b343a0234/tactics/foliage-data.js';
@@ -88,19 +89,23 @@ export function decodeTownSector(raw,sector,visualReplacement=new Set(),physical
     if(!allRoofsReplaced){const gx=x+sector.origin.x,gy=y+sector.origin.y,id=Math.floor(gx/24)+','+Math.floor(gy/24);if(!packet.roofs.has(id))packet.roofs.set(id,[]);packet.roofs.get(id).push({x:gx,y:gy,level});}
   }
   const plantCells=new Set();
-  const place=p=>{
+  const place=(p,maturePine)=>{
     const {x:localX,y:localY,kind}=p,x=localX+sector.origin.x,y=localY+sector.origin.y;
-    const placed={...p,x,y,id:sector.id+':'+kind+':'+localX+','+localY};
+    const placed={...p,x,y,maturePine,id:sector.id+':'+kind+':'+localX+','+localY};
     packet.plants.add(placed,[x,y,x,y]);
     return placed;
   };
-  for(const p of raw.props||[]){
+  const props=raw.props||[],maturePines=maturePinesForSector(props,sector.origin);
+  for(const p of props){
     if(!plantKinds.has(p.kind)||(p.z||0)!==0||!Number.isInteger(p.x)||!Number.isInteger(p.y)||p.x<0||p.y<0||p.x>=240||p.y>=240)throw Error('Unsupported native town prop: '+p.kind);
-    const placed=place(p);
+    const variant=maturePines.get(p);
+    const placed=place(p,variant);
     plantCells.add(p.x+','+p.y+',0');
     if(p.kind.startsWith('tree-')){
       const scale=p.kind.endsWith('-large')?MATURE_TREE_SCALE:1;
-      const solid={kind:'circle',centre:[placed.x,placed.y],radius:.22*scale,trunkHeight:2*scale,id:placed.id};
+      const pine=MATURE_PINE_STYLES[variant];
+      const solid={kind:'circle',centre:[placed.x,placed.y],radius:pine?.radius??.22*scale,
+        trunkHeight:pine?.trunkHeight??2*scale,id:placed.id};
       packet.plantSolids.add(solid,shapeBounds(solid));
     }
   }

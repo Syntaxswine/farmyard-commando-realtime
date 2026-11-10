@@ -37,6 +37,9 @@ test('Take all clears the chest hand and halo immediately and saves the empty ch
   assert.equal(hasHalo(a, 'supply-chest'), false);
   assert.ok(!Core.nearbyInteractions(a.s).some(object => object.id === 'supply-chest'));
   assert.equal(Core.previewInteraction(a.s, 'supply-chest', 'loot').ok, false);
+  a.el('toast').hidden = true;
+  a.view.options.onPick({interactionId: 'supply-chest'});
+  assert.equal(a.el('toast').hidden, true);
   const restored = decodeSave(a.saved.get(realtimeSave));
   assert.deepEqual(restored.interactables.find(object => object.kind === 'chest').inventory, []);
 });
