@@ -97,8 +97,9 @@ export function decodeTownSector(raw,sector,visualReplacement=new Set(),physical
     packet.plants.add(placed,[x,y,x,y]);
     return placed;
   };
-  const props=raw.props||[],maturePines=maturePinesForSector(props,sector.origin);
-  const matureBroadleaves=matureBroadleavesForSector(props,sector.origin,maturePines,(x,y,reach)=>{
+  const props=raw.props||[],retained=raw.mountDora.retainedMatureTrees===true;
+  const maturePines=retained?new Map():maturePinesForSector(props,sector.origin);
+  const matureBroadleaves=retained?new Map():matureBroadleavesForSector(props,sector.origin,maturePines,(x,y,reach)=>{
     const p={x,y},area=[x-reach,y-reach,x+reach,y+reach];
     if(roofBounds.some(bounds=>boxDistance(p,bounds)<reach)||
        packet.walls.query(area).some(w=>w.draw&&boxDistance(p,w.bounds)<reach))return true;
@@ -112,6 +113,13 @@ export function decodeTownSector(raw,sector,visualReplacement=new Set(),physical
   });
   for(const p of props){
     if(!plantKinds.has(p.kind)||(p.z||0)!==0||!Number.isInteger(p.x)||!Number.isInteger(p.y)||p.x<0||p.y<0||p.x>=240||p.y>=240)throw Error('Unsupported native town prop: '+p.kind);
+    if(retained&&p.mountDora?.matureVariant!==undefined){
+      const variant=p.mountDora.matureVariant,pine=p.kind.startsWith('tree-pine');
+      const styles=pine?MATURE_PINE_STYLES:MATURE_BROADLEAF_STYLES;
+      if(!Number.isInteger(variant)||!styles[variant]||!pine&&p.kind!=='tree-broadleaf-large')
+        throw Error('Unsupported retained mature tree in '+sector.id);
+      (pine?maturePines:matureBroadleaves).set(p,variant);
+    }
     const pine=maturePines.get(p),broadleaf=matureBroadleaves.get(p);
     const placed=place(p,pine,broadleaf);
     plantCells.add(p.x+','+p.y+',0');

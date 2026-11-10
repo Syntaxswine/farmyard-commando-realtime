@@ -7,7 +7,7 @@
   },
   "sourceMode": "project",
   "projectId": "mount-dora-downtown",
-  "projectSha256": "2940186491188524059f91746e6d3e94bc267e2a32c7be925a1fdcdf0c1b240e",
+  "projectSha256": "9275410a2bd909e2a6d3f7c2cf6c016420ef81fce6ce6538a2224b797c66ec7b",
   "sourceDigest": "2b742d1768425de6a41a60818a0d2fd3a72b71f1969de94a50ff9041ce216193",
   "sectorCount": 42,
   "expectedSectorCount": 42,
@@ -17,13 +17,13 @@
     {
       "id": "A01",
       "file": "sectors/A01.map.json",
-      "sha256": "02fc55a826648123b4badb79126c66aaf860347c86d4f007389f4707f0f25790",
-      "bytes": 1144933,
+      "sha256": "3a425276436df5bac77323212e8ff47fe2550cf3f3137a1723a31fd8e3de9beb",
+      "bytes": 1145862,
       "levels": 5,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 188,
+        "wallRuns": 183,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -48,18 +48,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "2f01fd765d9499b71011ac4585bbaa5b29cb97010ed2b5f096ab14bcfbe91c9b"
+      "normalizedSha256": "c867dc049f9ea320d67b7e08ee568d24ad0dcf60f4f866e163071353cfa2ad30"
     },
     {
       "id": "B01",
       "file": "sectors/B01.map.json",
-      "sha256": "570c7b0b689917b199938b3652f47e81bda957a4b89d757a5babee116f6aa979",
-      "bytes": 1134177,
+      "sha256": "0d6a665f5d682f57e24f5ef38707886f296cb51bf5d75fc89bc9abb8dd09462d",
+      "bytes": 1134419,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 267,
+        "wallRuns": 255,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -81,13 +81,13 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "7c07f400d3956dfc8f5bc037f644d3645a18276cb6ab403221b5295c8d168a84"
+      "normalizedSha256": "aee46c31ed1e8de13e165acd118d42a96729d0a46188528ea152b788bbfe3794"
     },
     {
       "id": "C01",
       "file": "sectors/C01.map.json",
-      "sha256": "120202cfb9fac42cff691a98d87ed62d7afa61dd5bb0528ccf85751d8a2f85f4",
-      "bytes": 1062506,
+      "sha256": "b541660326bb65f24b2ca2dfa60a48c8a00ad1e88643581c9741c1e8b4579588",
+      "bytes": 1061926,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
@@ -105,7 +105,10 @@
         "$.guards.0.character"
       ],
       "editCommand": {
-        "tool": "floor",
+        "tool": "texture",
+        "options": {
+          "groundKind": "ground-concrete"
+        },
         "start": {
           "x": 18,
           "y": 18,
@@ -114,18 +117,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "147089f70b076f3253905ed3cf600afa5459d77bfca82b96dfbdbb7c85473922"
+      "normalizedSha256": "f431b3c05cf52f816ac40a5e72a32ff3ebe1165ad15167c09d06bd52f30c294d"
     },
     {
       "id": "D01",
       "file": "sectors/D01.map.json",
-      "sha256": "fdb376df839f6ccc6cb8a05e5d946c050a31021dee710266e1340499bc3c62fd",
-      "bytes": 1034936,
+      "sha256": "e1f9694312d4a63c0d1c11387a5aadd9a0677ee70d289cfb1c399b55d8bd8aa2",
+      "bytes": 1037310,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 290,
+        "wallRuns": 292,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -147,18 +150,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "1f916fc22cc850eead431359522903f8928f0b2feac99caa6c0c657bb776563f"
+      "normalizedSha256": "be84e860e52f5ff90e69b3ced2a0dc30d4df9b6db1ace87078595f7398aa383e"
     },
     {
       "id": "E01",
       "file": "sectors/E01.map.json",
-      "sha256": "80cdb5a58c4415d6d9ce4e6e0858ccdf602c647e681f037eecc4f3da6ce1bea3",
-      "bytes": 1015180,
+      "sha256": "3a11cf996acea8f6b4053b07c0aca9537023c1217898ba07ff2b5a0e075d35eb",
+      "bytes": 1014016,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 276,
+        "wallRuns": 263,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -171,7 +174,10 @@
         "$.guards.0.character"
       ],
       "editCommand": {
-        "tool": "floor",
+        "tool": "texture",
+        "options": {
+          "groundKind": "ground-concrete"
+        },
         "start": {
           "x": 18,
           "y": 18,
@@ -180,18 +186,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "d8ed7fa692f32b939e242024d6ae427bf08ce9d42fdf5437c0da400e7bdb61c0"
+      "normalizedSha256": "a1a3f52029828600ad1762229fad44d3a0181ee148fdaf748f7b6934eba0006a"
     },
     {
       "id": "F01",
       "file": "sectors/F01.map.json",
-      "sha256": "61adf0a3e75d72d259759a19fd79f87342c23443385411296ed099d6e3060e9e",
-      "bytes": 1002299,
+      "sha256": "e22c339010a17c7341c7ffdb001b35224237bb4a09765bd3033ba0352c0eae46",
+      "bytes": 999691,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 227,
+        "wallRuns": 222,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -213,18 +219,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "a9a01dbaf9daf95fb082a8a692a7f4a0ae6d261af5caa25a1fc445ac23cf9e1d"
+      "normalizedSha256": "ab9602ab60a31cd4b512c4a25263239e493cab4ed1a2dc3607793e5ff4d34fd5"
     },
     {
       "id": "A02",
       "file": "sectors/A02.map.json",
-      "sha256": "b37cfcc8b806c4b84ea682d9af425913b2da7b425a33e85f6fc7bc3b12b26f3a",
-      "bytes": 1253722,
+      "sha256": "00edf9e75b9037123dbb3160d12c448e0774ae825d230e92169857624c6adbf4",
+      "bytes": 1232877,
       "levels": 6,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 333,
+        "wallRuns": 237,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -246,18 +252,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "d7f5aa1e93752f9a9e21696e11ed6ec194407d329bc384bb05d06bc0dd4b4d43"
+      "normalizedSha256": "aaefb9c4d8dbe6f71a494aca342f324a9dda768d602ece39fe2966e270918328"
     },
     {
       "id": "B02",
       "file": "sectors/B02.map.json",
-      "sha256": "2e724192003ec2bd318bccac139b3d93ae57ceaf3e780fe046e07edb6643b4f6",
-      "bytes": 1133197,
+      "sha256": "bf6271b1257088a139e627cf8250c8af3b94ddd700e867ff2f11356d276243aa",
+      "bytes": 1128380,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 275,
+        "wallRuns": 233,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -280,18 +286,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "87f813c007264be180ccf5eae71064705515d0c95cf949764a22783a3f31eabd"
+      "normalizedSha256": "c87302419a439eeb606f2385b93f622b95a3654d17236a76ffafc2277720eb21"
     },
     {
       "id": "C02",
       "file": "sectors/C02.map.json",
-      "sha256": "fb3d423e60fdc007e21dd22bbbfc2cb948d8097c9714098ae628b0a00a4bb8df",
-      "bytes": 1058404,
+      "sha256": "d091c513324551bac846422f3b5e8ddb74a6b6f81c382fd319ab18fa004c24d8",
+      "bytes": 1057899,
       "levels": 5,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 269,
+        "wallRuns": 263,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -316,18 +322,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "9ae2aecd20299202ab67d8c159449e09d066ea2af07a3363eeced79de3bf502a"
+      "normalizedSha256": "41abc6ec098e7d2e3313eb9431dcc231261f8a51b1e549aacb6e56765159b469"
     },
     {
       "id": "D02",
       "file": "sectors/D02.map.json",
-      "sha256": "f3725b958d7851f14f9a40efe826dcc4380f0d668859ba2e40b16494a81eb814",
-      "bytes": 1021186,
+      "sha256": "d8453bb8297db6530c5cbf66cf0ab74274eeeea5f28a41379ffe00412c2391fe",
+      "bytes": 1016547,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 283,
+        "wallRuns": 262,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -349,18 +355,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "6bdd1b24a82e100a798ec871a51915fd7472d46c61742a61168b8b2066459e44"
+      "normalizedSha256": "7940a69bf270e7e164abf11a27c2b58d139119023399bba31e14287999516000"
     },
     {
       "id": "E02",
       "file": "sectors/E02.map.json",
-      "sha256": "69d759324fd8987fdb509efdb299649a494d5d1968132b72fae3f79dae86b5dc",
-      "bytes": 1228821,
+      "sha256": "778e1364a9be378d45c988835023e5b894bba6bbe657fe590cb6c4cf32746df2",
+      "bytes": 1229995,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 170,
+        "wallRuns": 171,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -382,18 +388,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "b430297e1242bf074f731e43898d478a0f13e13f3e90b69fa0b8def669cb0b3f"
+      "normalizedSha256": "56361f1d1df0563bd517f32bea07192b28170111f78ce513992ec3f405e78492"
     },
     {
       "id": "F02",
       "file": "sectors/F02.map.json",
-      "sha256": "b0cdb92ac0f5144f420ab2c614b31cfec252177ce013cf95a5c4ad07a258eaf1",
-      "bytes": 1146731,
+      "sha256": "7f0848061736e180546dd6332c8ac0293f8b14ac1741ad7bf894cb50c3a35357",
+      "bytes": 1144644,
       "levels": 4,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 98,
+        "wallRuns": 86,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -415,18 +421,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "b0cf1e4fafa4f52ad4e3f37d766f5c3393df51941dbcedd1bfa22c93bcd762ed"
+      "normalizedSha256": "474efdee07d60651545fbb3f67652a5dd48cb24fe7732ddf8f0ebe2d36ec0f2e"
     },
     {
       "id": "A03",
       "file": "sectors/A03.map.json",
-      "sha256": "ef364d0c02faaebd89a0cdca1f75013a2be33cf175ff9f455c67df870d600d30",
-      "bytes": 754852,
+      "sha256": "094ddde3a9a9f58670b1e8a6a5f64f4eedbe833ad488154c07c798ed192d3ba3",
+      "bytes": 749764,
       "levels": 4,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 140,
+        "wallRuns": 104,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -451,18 +457,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "19a53e67459871efa85f37854e1d3596b1676df41d8d5013ac84bab31e96385e"
+      "normalizedSha256": "ef1b14b8b771e4f954c4f247c300f78c7e221fdfdfa287892ef0c444e17b32e7"
     },
     {
       "id": "B03",
       "file": "sectors/B03.map.json",
-      "sha256": "220d46e0f32d09a624a36ecdca65c88205dbbb05165ffa489796127090a7961d",
-      "bytes": 1260275,
+      "sha256": "df330a07224e68743c992f6638467d6619336f800e61acb364223ac38f018807",
+      "bytes": 1259414,
       "levels": 4,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 340,
+        "wallRuns": 315,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -484,18 +490,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "2bdb7a372b5b7ffe209cb1cafd542a263cc1371320e91b024fbdc8df446f2009"
+      "normalizedSha256": "094105dd7440eb9479db75e6ec9fbe8e84dfdc9f0736e73f44ed5e5eaa3bec0e"
     },
     {
       "id": "C03",
       "file": "sectors/C03.map.json",
-      "sha256": "221e2d8c507bf01e8356606fa875f551c5e4c62b7bdec7dece89301ba67e6f48",
-      "bytes": 1167845,
+      "sha256": "ebf5a92ddddb2b12459eb6ab1d5d74ef1fb69e24fe983439558432e473485076",
+      "bytes": 1162585,
       "levels": 5,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 251,
+        "wallRuns": 224,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -517,18 +523,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "d2520a67daeaee51e6f928c1e4d025bc7cda52459d559f382b959ef12b62341a"
+      "normalizedSha256": "5abd4f6b43bde009353e916c156c614bbc73e96d1009005584b63a52808b6e21"
     },
     {
       "id": "D03",
       "file": "sectors/D03.map.json",
-      "sha256": "579bc31f806c8054d202d1d4cb205a09496160ad2eabee4c9aeb61843555dadb",
-      "bytes": 1054823,
+      "sha256": "a39808c6bdacdead233130109b0b2ad69bd378fb7d7052a21329926e5103cd9f",
+      "bytes": 1053258,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 189,
+        "wallRuns": 172,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -551,13 +557,13 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "8d2129db7f9e759ab1198738fda726f1831dc582222fd5cf38cab618ee1fcf4a"
+      "normalizedSha256": "281c5b2c89b634ea66ccf9283f67dc228a03ab200cc794a08b92a53e05efef46"
     },
     {
       "id": "E03",
       "file": "sectors/E03.map.json",
-      "sha256": "dfe5503a59bca891fd1d647255677e0cfa7af5225ebe085fd92538aa76a97e65",
-      "bytes": 1075386,
+      "sha256": "35fa93282b29c56e80b748e413ac28e19c5def80f7733d69b747583c94faec5e",
+      "bytes": 1074929,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
@@ -587,18 +593,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "09a62279cf874a27eb948da12a7c1d166e152b95eeecb350478342aee5fa5c53"
+      "normalizedSha256": "7cd2b834064b9fe7276ddc5e3959523ada5066b39c1d5e9e504759072d18a3fa"
     },
     {
       "id": "F03",
       "file": "sectors/F03.map.json",
-      "sha256": "70ecc63feb3d7e8a48e125bcf4afd84b78ece02116cd2de3ee82fb49ddf9125c",
-      "bytes": 1083806,
+      "sha256": "7f5a8a18655572411865f3abb5b4ef80808f8c859f437ce2c3cdf2d00e8e91fd",
+      "bytes": 1081531,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 229,
+        "wallRuns": 209,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -623,13 +629,13 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "d82754dba2359e44ae24e400e24ca7a4647d24ad53858d88431f9bf7612c407e"
+      "normalizedSha256": "3c0dd77e102bb43262045f6a214a83565cc1fde29f4ff9f76359d2edb73e758b"
     },
     {
       "id": "A04",
       "file": "sectors/A04.map.json",
-      "sha256": "6879231e12abb2b4f2166fd4fa06661a8f6b33659d1beae9daa8b173f3929ccb",
-      "bytes": 491944,
+      "sha256": "51d6fe1b54fbb44474645ff51555dc2af24faea8c60e3e011e8ce5731bc5dea0",
+      "bytes": 492075,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
@@ -656,18 +662,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "4709032390d18904520cb542ab4b3bf573599e9483a5a3a3f13cb69afa84f5a3"
+      "normalizedSha256": "34defb5d49d4a417821788f6e99007571f8d3616d15185ce51eccbddd8b192af"
     },
     {
       "id": "B04",
       "file": "sectors/B04.map.json",
-      "sha256": "f1371fd36c4d6a708781b119a7594ce8733dea088070446e40de855f00230b52",
-      "bytes": 1447781,
+      "sha256": "716136d4d7addb5eaef45701892342cccf62f83d4f0cbf3340adcd23d20726ec",
+      "bytes": 1438391,
       "levels": 4,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 190,
+        "wallRuns": 149,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -689,18 +695,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "b7acb39f8061fdf3e086ef817bff112c3eef61f75653268e366357c0dd5227ea"
+      "normalizedSha256": "ddb49c0919ded42b1097ad1cadb9c46130a78f072df1e364178c3bfbe34f709b"
     },
     {
       "id": "C04",
       "file": "sectors/C04.map.json",
-      "sha256": "6128215b7610b815eefb02d6c899a7ea3a7899a482b5dcea96d111d313d53c0c",
-      "bytes": 1131890,
+      "sha256": "0bef9a43088e740f35cbd4451cf11273ea5ff8cff5613d251d0dd5f80ae53689",
+      "bytes": 1121214,
       "levels": 5,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 231,
+        "wallRuns": 175,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -722,18 +728,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "3ef509d35e8339c277ec6a395b0c5f693748733b3fecd847cd07ac778416f6ff"
+      "normalizedSha256": "3b2d9a4446801f0a832025d5873d2ca0a6c38011f2688185877595f4990dd2e8"
     },
     {
       "id": "D04",
       "file": "sectors/D04.map.json",
-      "sha256": "3daac05e2d843d1900f1016114667870c97b9fadd1f284dbcd10c7bbe8cc2b90",
-      "bytes": 1155895,
+      "sha256": "050df9fcb6fcc0cff2c58bcd7eb6598ecf1067e6b77ffead6ec2516bc2310ca5",
+      "bytes": 1156722,
       "levels": 5,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 204,
+        "wallRuns": 194,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -755,18 +761,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "364200d5c7456fd34a7f210b26b48b3918d2b9be5d3ef8deb3eb9c2610ccada4"
+      "normalizedSha256": "d63f0decb1ec3795a02f9f4af8a3a85b76dbfaa76f1558ea255af894cfc8370a"
     },
     {
       "id": "E04",
       "file": "sectors/E04.map.json",
-      "sha256": "e1f4af8395cd42e8c783a38ff9236e2ddf77057301b72411daae4f007e42bc35",
-      "bytes": 1060009,
+      "sha256": "4192107834d2308d60fa518045dfe53d41fcb1e4c72c162d13f2be36ddb5dac7",
+      "bytes": 1059997,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 160,
+        "wallRuns": 150,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -789,18 +795,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "06e4c1aaeb8dd3ed759bb05e9cf41e6a552e3ef64c8ab5af110382b33ca66047"
+      "normalizedSha256": "4bfdbd8949ab39fd8dd1c1adf50bd287b11ef03bbd6bd5ff64bcc095fe02c50a"
     },
     {
       "id": "F04",
       "file": "sectors/F04.map.json",
-      "sha256": "e5037746031c3ab26d7bddb10e24e08be4be8a7599a57115c3a0f3ae85227f00",
-      "bytes": 1047871,
+      "sha256": "018982b2726ce3d2ff11752f9a213f5bf8a650ec1829ad182336d2b03fc696db",
+      "bytes": 1047926,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 150,
+        "wallRuns": 147,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -822,13 +828,13 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "ac50a4219064f3b5b62caa77a17ff39b9258c54794a55d0ebc0626650d9e3030"
+      "normalizedSha256": "782c35150f341c378cf18c0aeeb8e2b71ae16643e8f99b9532cbf2743e8fdbb6"
     },
     {
       "id": "A05",
       "file": "sectors/A05.map.json",
-      "sha256": "9d41f155fd77f38ed4989a5f6630a3af9b4f752268fea4c38773031ba49901e7",
-      "bytes": 462029,
+      "sha256": "6f2a17a8590e5b2a1aaf533715205f3ce298c5cb88431d878aeb3c7abe7909ab",
+      "bytes": 462091,
       "levels": 3,
       "nativeReady": false,
       "errors": [
@@ -843,8 +849,8 @@
     {
       "id": "B05",
       "file": "sectors/B05.map.json",
-      "sha256": "a091a0553eba76e5235d829a235f838e7d61d1fced452c7976bc7616c102f40b",
-      "bytes": 687738,
+      "sha256": "4634b9efcfadb9cb57d07efaa177b8bb02fa3959aba5c05b90065bf05c1aa193",
+      "bytes": 687480,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
@@ -871,13 +877,13 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "ae7e428b925470b7c995bbac88728e8b47abfb056aaf8a86d254148dfa415bbf"
+      "normalizedSha256": "4dffcabe99cdefb910efb9964f15ea5ee6e230e1fada6a7b135bc92fe1c57c42"
     },
     {
       "id": "C05",
       "file": "sectors/C05.map.json",
-      "sha256": "fd80bdf9c95d8349224374c111634962cb78c008f4a2b7f2c734c591fbb636ad",
-      "bytes": 849938,
+      "sha256": "8255afc11967fed797c282327f0cd842f11d6621b07a177a6dee7eb4fae77c58",
+      "bytes": 850407,
       "levels": 5,
       "nativeReady": true,
       "errors": [],
@@ -904,13 +910,13 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "3afba9dfb337ae2583dc3d8496b0d8e6453a9866f5bcf4bcdfdfa2f3eed65357"
+      "normalizedSha256": "3db684b415c2b514730822199814ec486b547e5eb339dbd0d559e040d6fc2566"
     },
     {
       "id": "D05",
       "file": "sectors/D05.map.json",
-      "sha256": "fbd34dbf952dc2977eededd09bd2b4b25c4e278e4d9c75ce93601420b47da773",
-      "bytes": 1120229,
+      "sha256": "579ceb178a27b046ffa0d18cbea9a2405b1dada74a6191bd9906d863ce823612",
+      "bytes": 1117449,
       "levels": 4,
       "nativeReady": true,
       "errors": [],
@@ -937,18 +943,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "545896c0a7195ad1754b381ded357783727599cb4fb320e05a24970fc96f642c"
+      "normalizedSha256": "952103b012e84dbd497bf9b2fe1ad3a47efaccc3daefcac5ed0bf7165c3748f3"
     },
     {
       "id": "E05",
       "file": "sectors/E05.map.json",
-      "sha256": "5ba4ec133ac0ad965aba4c766ac794209b55e0fe8ba0e738e7e64f77df412b30",
-      "bytes": 1102443,
+      "sha256": "88ea12f90cda7dbb2cc24400db759677db29a0fdb3fb5ff17fc536814b3ee6e1",
+      "bytes": 1103735,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 226,
+        "wallRuns": 224,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -970,18 +976,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "4b738052489380d983ae36fa36cfcdf3ccc9c57456a74f18510ec5089254aeab"
+      "normalizedSha256": "59fec2312ef153c0297841361385c821db5863075f44a9813c1e5c1ec6e0a337"
     },
     {
       "id": "F05",
       "file": "sectors/F05.map.json",
-      "sha256": "ef2efd5510670ba5e037bb813499350ef970bf5a4ccd2bb31b0ee0e395c891dd",
-      "bytes": 1102378,
+      "sha256": "14f5a21a4871b846505c35e6ee82d8c88b3e9da25d7a13cf9047ca82b3230d67",
+      "bytes": 1100446,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 218,
+        "wallRuns": 191,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -1003,13 +1009,13 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "2738c7c18c42daa41273081743bcc32e941d76613a6e235fe3c98618ab2c1578"
+      "normalizedSha256": "c4c294a3e372c877c6e65652ca183ab00f6c9403c1b0b55f0788016e35c21318"
     },
     {
       "id": "A06",
       "file": "sectors/A06.map.json",
-      "sha256": "41131890774b749c4cb5b39141da780a1144edab3a748ac99425b1a3ebe73ff9",
-      "bytes": 462030,
+      "sha256": "1a7166c9e4fc32f7fb53780946282c80802aeeb5f9e118430a05fc2946486f89",
+      "bytes": 462092,
       "levels": 3,
       "nativeReady": false,
       "errors": [
@@ -1024,8 +1030,8 @@
     {
       "id": "B06",
       "file": "sectors/B06.map.json",
-      "sha256": "e0006efcc1c925e1d01fcd5fd8324019c1dbc7b96c500e7a5c527a267248c23f",
-      "bytes": 678039,
+      "sha256": "8c843e33ade5f812de769e5fb7e5503b051d71404a5cfd607d71ce0cd566298e",
+      "bytes": 678101,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
@@ -1052,18 +1058,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "9e428844e9e21ae49cad139e1632aabda4d29dc6d160a3cd590401040ffde421"
+      "normalizedSha256": "fcdae764c4e9b50669ff358064d46f85d9e73fd37814ca1be7e127398dd5ad70"
     },
     {
       "id": "C06",
       "file": "sectors/C06.map.json",
-      "sha256": "04e88f2ccb16307b9ac1ab6d56e7e78fef4653af28e7d3533d6b1fc7ab2b0070",
-      "bytes": 965300,
+      "sha256": "f764b79107bad99af2f7e17a9282deb94b26d9e9c4a1f0b135c9d521d8bc4ed4",
+      "bytes": 964793,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 51,
+        "wallRuns": 43,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -1085,18 +1091,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "6e126374f886c64dcfbda26c0b7da1293e6904c98db8003e680a1aadd5cee03e"
+      "normalizedSha256": "17753ee152cc52d96809cda0c9a4789c27d0cea8b7dd63f2e1d215041f3c9a56"
     },
     {
       "id": "D06",
       "file": "sectors/D06.map.json",
-      "sha256": "253aace9674926f1553bb9c06fe1a83d7a097f5314fd36dff9ec637b99bcc72e",
-      "bytes": 1111549,
+      "sha256": "cb6a5b7a4be3ebe222785d588d22597599ff0a32d640c28336cb6007d40c213b",
+      "bytes": 1108225,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 193,
+        "wallRuns": 174,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -1118,18 +1124,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "f30399d553dde1bb0c69e7a625dff4bdeefa937da62dae06ff06996fda89a7a3"
+      "normalizedSha256": "05a3ffd479471b7e523784d05175e061b14977c6f56935e0518bbe83206d6070"
     },
     {
       "id": "E06",
       "file": "sectors/E06.map.json",
-      "sha256": "3221ef50223ed20f62deed64768f5ea3555a5951926320f01d677fd9bf0ec732",
-      "bytes": 1075676,
+      "sha256": "f51675c9d296cda218424c4dffcb32fc9e39e43951a2bce267bbe89e5874f008",
+      "bytes": 1074368,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 170,
+        "wallRuns": 167,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -1151,18 +1157,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "c53cebdb26ac7757107e4c269fb10937c5a3732a86311d3c04ea1f4d2ffcc2ed"
+      "normalizedSha256": "62b0e7aa4360296299fcf84887a1c1e8339157d73c52c8f630ee167274ab5d04"
     },
     {
       "id": "F06",
       "file": "sectors/F06.map.json",
-      "sha256": "ccfaf09fc09de74ae816c1e51dbe0e218686274a09e1e6dced2852813882e6dd",
-      "bytes": 1048623,
+      "sha256": "967796e7986868c203328d01fc7f084676155b07a2a72671580d55240d6a69d2",
+      "bytes": 1048237,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 228,
+        "wallRuns": 226,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -1184,13 +1190,13 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "3664bc5a922b661b65ae3924740a48772d2e7b5bcc7873c17a8b846d9b36563d"
+      "normalizedSha256": "a434b0e57b00acc80dc9608a4eb01270030214f7ee12b380b8f27af814b020d7"
     },
     {
       "id": "A07",
       "file": "sectors/A07.map.json",
-      "sha256": "94c92ed46e2b13ff3c433906435eb5e2475f4eed054e16ce71a41b9d995eb1ac",
-      "bytes": 462030,
+      "sha256": "7bf16c7859534ccc0f1de3b97a11686e77c6bfbbecf090911ae0fb38be4503d1",
+      "bytes": 462092,
       "levels": 3,
       "nativeReady": false,
       "errors": [
@@ -1205,8 +1211,8 @@
     {
       "id": "B07",
       "file": "sectors/B07.map.json",
-      "sha256": "982973a5c6481a14d51cfeeac907efddae7ad3eb1f778257ff4647becad04c3d",
-      "bytes": 1237469,
+      "sha256": "2b5f4475b7f8c6d7dc034ba10064431b18cff294218f7082b83168e2319c32f8",
+      "bytes": 1237531,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
@@ -1233,18 +1239,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "f1f98860194ad482e175012b660e3c4bf467e9068dd2d7e7d6cd79d4440e1d6c"
+      "normalizedSha256": "f7d138672b2a025be615780c038826a69282ea38495b46e54ff27d56bccbfbb3"
     },
     {
       "id": "C07",
       "file": "sectors/C07.map.json",
-      "sha256": "300cd19fffbd8dc8c4e4808d81fdb9bd26c105b03b11a6ca190c05bb9eeb27c7",
-      "bytes": 1455513,
+      "sha256": "b203601e7ddd6be0b9d8ce27e81e91e2e6bcab7d34c562fbe426dc7fcc7cc29f",
+      "bytes": 1455041,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 117,
+        "wallRuns": 115,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -1266,18 +1272,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "5778187a1ac4adc58960e497c9f0d08423850e095a80418ded2dcb89ebd91766"
+      "normalizedSha256": "2d03ec011ba3a24c6f8d05971e3bca5c38c58dbf5371a84bc3e73d1c9d88c32e"
     },
     {
       "id": "D07",
       "file": "sectors/D07.map.json",
-      "sha256": "8f2a0f463fa9c4845b1bca69635f51d93ba2e71bc18ffbef9dcc14ea4806c8c8",
-      "bytes": 1272204,
+      "sha256": "56168834f7e4e2bc1b18c99dd4e8f3366e636cc728733875cd9de71625c7b1a6",
+      "bytes": 1271763,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 235,
+        "wallRuns": 229,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -1299,18 +1305,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "71882b8fd75f1fd260d579948732fd1df8e83da0daca85a6c4c5efafce4c6941"
+      "normalizedSha256": "af3d0adefbe3bb95503836a0eddef92b30c4f7dcbf51513713f42add319374af"
     },
     {
       "id": "E07",
       "file": "sectors/E07.map.json",
-      "sha256": "d1431534a7b325cc27262c0a8dcad2c466129a1994622011e2b540a9ae6c681c",
-      "bytes": 976324,
+      "sha256": "55ac6a39a8d4ec78b081b2d895f9464a6e06c334195a13f0702f347764d3d8b6",
+      "bytes": 975048,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 96,
+        "wallRuns": 92,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -1332,18 +1338,18 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "9b3298a8bba84c1ad08a8334200098744ed253db1147120619c3e0e36db4d94b"
+      "normalizedSha256": "2aee4e85e2d6f6aff737012670e7101bb5b84962c7f29c5618ef936a2f8fd978"
     },
     {
       "id": "F07",
       "file": "sectors/F07.map.json",
-      "sha256": "4f1c9631e6a2046c1971795634d59d83508a90ffa717dba0ef31211fd812def6",
-      "bytes": 1044934,
+      "sha256": "2e66d52f538bf28e47be252570f8ec3b7906d81f0766d94eb98a8969cf13d448",
+      "bytes": 1018510,
       "levels": 3,
       "nativeReady": true,
       "errors": [],
       "features": {
-        "wallRuns": 27,
+        "wallRuns": 25,
         "slopedRoofs": 0,
         "buildingPrefabs": 0
       },
@@ -1365,7 +1371,7 @@
       },
       "history": true,
       "exportReopen": true,
-      "normalizedSha256": "e1ffcff100d85f61e6322f8d5d0e786e749eed31db70052b6322bdb195b68510"
+      "normalizedSha256": "a6c4d9f26b0da264709e1b2504d01eb3da83753ce0e8f9862120af620eda9c57"
     }
   ],
   "unexpectedErrors": []

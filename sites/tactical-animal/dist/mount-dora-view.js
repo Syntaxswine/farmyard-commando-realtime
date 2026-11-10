@@ -37,7 +37,7 @@ function plantAppearance(plant){
 // Original AFT textures/plant factory and exact Nautilus wall panels, adapted only for bounded residency.
 export class TownEnvironment{
   constructor(renderer,state,{onLoading=()=>{},onError=()=>{},loader,artModule,createArt,loadAtlas}={}){
-    this.world=getTourWorld(state);this.state=state;this.renderer=renderer;this.root=new T.Group();this.root.name='Mount Dora resident town';
+    this.world=getTourWorld(state);this.state=state;this.renderer=renderer;this.artModule=artModule;this.root=new T.Group();this.root.name='Mount Dora resident town';
     this.chunks=new Map();this.materials=new Map();this.textures=new Map();this.plantPrototypes=new Map();this.plantCutaway=new FoliageCutaway();
     this.stats={created:0,disposed:0,groundCells:0,wallPanels:0,plantModels:0,plantBatches:0};this.disposed=false;this.generation=0;
     this.cube=new T.BoxGeometry(1,1,1);this.plane=new T.PlaneGeometry(1,1);this.plane.rotateX(-Math.PI/2);this.wallGroup=new T.Group();this.root.add(this.wallGroup);
@@ -130,8 +130,10 @@ export class TownEnvironment{
       }
     }
   }
+  // Use the same one-metre cell centre as the supported pier ground.
+  surfaceHeight(x,y){return this.artModule?.deckHeightAt?.([Math.floor(x+.5)+.5,Math.floor(y+.5)+.5])??0;}
   setFocus(unit,camera){
-    const eyeHeight=unit.stance==='prone'?.3:unit.stance==='kneeling'?.75:1.2;
+    const eyeHeight=this.surfaceHeight(unit.x,unit.y)+(unit.stance==='prone'?.3:unit.stance==='kneeling'?.75:1.2);
     this.landmarks?.setFocus?.([unit.x+.5,unit.y+.5],{camera,eyeHeight});
     this.plantCutaway.update(camera,[{id:unit.id,position:[unit.x,eyeHeight,unit.y],level:0}]);
     const ppu=this.renderer.domElement.clientHeight*camera.zoom/(camera.top-camera.bottom);

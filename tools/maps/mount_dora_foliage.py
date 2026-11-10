@@ -35,7 +35,7 @@ def scatter(width, depth, spacing, salt):
                 yield x, y, seed
 
 
-def build_vegetation(features, terrain, green, blocked, width, depth, size, code, sector_id, *, reserved=()):
+def build_vegetation(features, terrain, green, blocked, width, depth, size, code, sector_id, *, reserved=(), retained=()):
     """Return native props, native AFT brush cells and the global trunk cells."""
     props_by_sector = defaultdict(list)
     foliage_by_sector = defaultdict(dict)
@@ -46,15 +46,18 @@ def build_vegetation(features, terrain, green, blocked, width, depth, size, code
         return (0 <= x < width and 0 <= y < depth and (x, y) not in protected
                 and terrain[y * width + x] in green_ground and not blocked[y * width + x])
 
-    def put(x, y, kind, habitat, source_id=None):
+    def put(x, y, kind, habitat, source_id=None, mature_variant=None):
         occupied.add((x, y))
         if kind.startswith("tree-"):
             tree_cells.add((x, y))
         sid = sector_id(x // size, y // size)
+        metadata = {"sourceId": source_id, "habitat": HABITATS[habitat],
+                    "placement": "mapped-tree-cell-proxy" if source_id else "declared-seeded-greenery"}
+        if mature_variant is not None:
+            metadata["matureVariant"] = mature_variant
         props_by_sector[sid].append({
             "x": x % size, "y": y % size, "z": 0, "kind": kind,
-            "mountDora": {"sourceId": source_id, "habitat": HABITATS[habitat],
-                          "placement": "mapped-tree-cell-proxy" if source_id else "declared-seeded-greenery"},
+            "mountDora": metadata,
         })
 
     for feature in features:
@@ -64,6 +67,15 @@ def build_vegetation(features, terrain, green, blocked, width, depth, size, code
         if clear(x, y) and (x, y) not in occupied:
             kind = "tree-pine" if feature["tags"].get("leaf_type") == "needleleaved" else "tree-broadleaf"
             put(x, y, kind, green[y * width + x], feature["id"])
+
+    for tree in retained:
+        x, y, kind, variant, habitat = (tree[key] for key in ("x", "y", "kind", "variant", "habitat"))
+        variants = {"tree-pine": 3, "tree-pine-large": 3, "tree-broadleaf-large": 4}
+        if (type(x) is not int or type(y) is not int or type(variant) is not int
+                or not 0 <= variant < variants.get(kind, 0) or habitat not in ("park", "wood")
+                or not clear(x, y) or (x, y) in occupied):
+            raise ValueError(f"Retained mature tree needs a clear, unique site at {x},{y}.")
+        put(x, y, kind, HABITATS.index(habitat), mature_variant=variant)
 
     for habitat, (spacing, chance, mature_chance) in TREE_PROFILES.items():
         for x, y, seed in scatter(width, depth, spacing, habitat):

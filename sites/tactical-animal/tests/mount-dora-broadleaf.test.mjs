@@ -5,7 +5,7 @@ import * as T from '../dist/aft/tactics/vendor/three.module.js';
 import {createBiomePlantFactory} from '../dist/aft/tactics/biome-foliage-models.js';
 import {MATURE_TREE_SCALE} from '../dist/aft/tactics/biome-foliage-data.js';
 import {createMountDoraBroadleaf,MATURE_BROADLEAF_STYLES} from '../dist/mount-dora-broadleaf.js';
-import {maturePinesForSector,MATURE_PINE_STYLES} from '../dist/mount-dora-pines.js';
+import {MATURE_PINE_STYLES} from '../dist/mount-dora-pines.js';
 import {TownWorld,decodeTownSector} from '../dist/mount-dora-world.js';
 import * as art from '../dist/mission-art/mount-dora/manifest.js';
 import {Core,DEFAULT_BUILD,createSoloGame,hero,confirmedImpact,projectileSegmentClear,freePoint} from '../dist/solo-game.js';
@@ -13,18 +13,16 @@ import {Core,DEFAULT_BUILD,createSoloGame,hero,confirmedImpact,projectileSegment
 const base=new URL('../../../maps/mount-dora/',import.meta.url);
 const project=JSON.parse(fs.readFileSync(new URL('project.json',base)));
 const read=sector=>JSON.parse(fs.readFileSync(new URL(sector.file,base)));
+const retention=JSON.parse(fs.readFileSync(new URL('source/retained-mature-trees.json',base)));
 
-test('mature broadleaves keep their seeds and respect the spacing and roof envelopes',()=>{
+test('the port retains all 106 mature trees and keeps the crowns clear of roofs and each other',()=>{
   const world=new TownWorld(project,{baseURL:base,art});
   const broadleaves=[],pines=[];
   try{
     for(const sector of project.sectors){
       const raw=read(sector),roofs=world.roofBoundsForSector(sector);
       const packet=decodeTownSector(raw,sector,world.visualReplacement,world.physicalReplacement,roofs);
-      const pineSeeds=maturePinesForSector(raw.props||[],sector.origin);
-      const oldPines=new Map([...pineSeeds].map(([p,variant])=>[sector.id+':'+p.kind+':'+p.x+','+p.y,variant]));
       const foundPines=packet.plants.records.filter(p=>p.maturePine!==undefined);
-      assert.deepEqual(new Map(foundPines.map(p=>[p.id,p.maturePine])),oldPines);
       pines.push(...foundPines);
       for(const p of packet.plants.records.filter(p=>p.matureBroadleaf!==undefined)){
         const seed=raw.props.find(s=>s.x+sector.origin.x===p.x&&s.y+sector.origin.y===p.y&&s.kind===p.kind);
@@ -41,6 +39,13 @@ test('mature broadleaves keep their seeds and respect the spacing and roof envel
         broadleaves.push(p);
       }
     }
+    const expected=new Map(retention.trees.map(p=>[p.x+','+p.y,[p.kind,p.variant]]));
+    const rendered=new Map([...pines,...broadleaves].map(p=>[p.x+','+p.y,[p.kind,p.maturePine??p.matureBroadleaf]]));
+    assert.deepEqual(rendered,expected);
+    assert.equal(pines.length,52);
+    assert.equal(broadleaves.length,54);
+    assert.equal(retention.trees.filter(p=>p.previous).length,3);
+    assert(retention.trees.every(p=>!p.previous||Math.hypot(p.x-p.previous[0],p.y-p.previous[1])<=5));
     assert.equal(new Set(broadleaves.map(p=>MATURE_BROADLEAF_STYLES[p.matureBroadleaf].form)).size,2);
     for(const [i,p] of broadleaves.entries()){
       assert(broadleaves.slice(0,i).every(q=>Math.hypot(p.x-q.x,p.y-q.y)>=21));
@@ -52,6 +57,7 @@ test('mature broadleaves keep their seeds and respect the spacing and roof envel
 
 test('roof and wetland seeds retain their legacy tree path, while the adult shaft matches its cylinder',async()=>{
   const sector=project.sectors.find(s=>s.id==='C03'),raw=read(sector),world=await new TownWorld(project,{baseURL:base}).identify();
+  delete raw.mountDora.retainedMatureTrees;
   raw.terrain=Array.from({length:240},()=>Array(240).fill('ground-grass'));
   raw.upper=[{},{}];raw.levels=3;delete raw.wallRuns;delete raw.foliage;
   const prop=(x,y,habitat='park')=>({x,y,z:0,kind:'tree-broadleaf-large',mountDora:{sourceId:null,placement:'declared-seeded-greenery',habitat}});

@@ -28,8 +28,20 @@ Buildings now follow **one-metre tile edges**. Shared building groups are fitted
 together, retaining both courtyard holes and all 30 shared-owner relationships.
 `authored-buildings.json` supplies the native walls, floor/upper masks, artwork
 and collision. Each building retains its original `geographicGeometry` alongside
-its authored geometry in `features.json`. The depot has a recorded 6.2 m
-relocation to keep its proportions while clearing the unchanged streets.
+its authored geometry in `features.json`. Straight downtown streets and their
+frontages now share whole-metre lines. Curved roads retain their authored bends.
+The depot moved with its street and is 6.75 m from its geographic centre. Its
+relocated facade still needs a field review.
+
+The lakefront adds 19 source-mapped piers raised 0.4 m on AFT timber trellises,
+including the reviewed Rusty Anchor T junction. The disused railway uses the
+pinned Nautilus visual kit. These additions use the same streamed tour terrain
+and collision checks as the rest of town.
+
+The retention plan in `maps/mount-dora/source/retained-mature-trees.json` records
+all 52 mature pines and 54 mature broadleaves from the prior release. Three
+trunks moved to clear nearby sites by at most five metres. The other 103 use
+their original coordinates, and each keeps its original model variant.
 
 Five open stage/shelter decks also use integer-edge plans. The mapped Palm
 Island pavilion has bridge support under its deck and a clear connection to the
