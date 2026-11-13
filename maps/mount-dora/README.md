@@ -61,11 +61,14 @@ embedded in the game is not evidence that Nautilus wall-run extensions render.
   lake, planks on open ground, 2 m wide (OpenStreetMap records no width, so this
   is the boardwalk proxy). In 3D each deck stands 0.4 m over the water on AFT's
   timber trellis, cut down to fit beneath it (the owner's choice of a low deck;
-  the 2018 lidar puts the real decks a median 0.43 m up), and a walker on a deck
-  stands at its height wherever the drawn deck covers the centre of their cell.
-  A walker crosses only the cells whose centres lie within 0.75 m of a deck line
-  (not past its free ends, round at its joints), so they stay within 0.25 m
-  (square decks) to 0.46 m (diagonal ones) of the drawn deck's edge. Segments
+  the 2018 lidar puts the real decks a median 0.43 m up). Where two deck lines
+  meet, both run on to a mitred corner. A walker crosses only the cells whose
+  centres lie within 0.75 m of a deck line (not past its free ends, round at its
+  joints). They stand on a deck wherever their body (0.23 m) overlaps it, so at
+  most 0.23 m beyond its edge on land and never inside it at ground height. On a
+  deck cell over water they always stand on the deck, at most 0.27 m past its
+  edge (at a free end); on the footbridge cell under pier 508450229's end, up to
+  0.44 m. Segments
   mapped back over one another, such as the
   cross-docks mapped out and back (A-B-C-A), are drawn once along their chord.
   A pier leaves the paths that meet it alone. One reviewed observation adds a
@@ -84,7 +87,16 @@ embedded in the game is not evidence that Nautilus wall-run extensions render.
   generation records.
 - AFT trees, shrubs and reeds dress mapped parks, woods, wetlands and open ground
   in residential areas. The native woodland brush paints undergrowth in woods
-  and wetlands. Individual placements are seeded scenery.
+  and wetlands. Individual placements are seeded scenery. Then each tree crown
+  the 2018 lidar saw with no trunk yet gets one tree near its top: 3,802 of
+  6,968 crowns ([reference/lidar](reference/lidar/README.md#tree-crowns)). It is
+  mature from 12 m tall, and a pine where the crown is twice as tall as it is
+  wide. They go in after the sentries and markers, so neither moves.
+- Roofs the lidar sees over Lake Dora with no OSM or county outline are drawn by
+  the art kit as open roofs on posts: boathouses, covered slips and the
+  marina's slip rows ([reference/lidar](reference/lidar/README.md#roofs-over-the-water)).
+  The game's ground under them is unchanged: water inside Lake Dora's OSM
+  outline, land where the lidar's water runs past it (5 pieces of 3 roofs).
 - Mapped sports pitches exclude procedural trees. Tennis and pickleball polygons
   use a declared existing asphalt ground proxy without invented court markings;
   overlapping source records are retained rather than asserted as a current count.
@@ -95,7 +107,7 @@ workshop refuses them because it requires four walkable squad starts and a
 travel marker. The authoring data does not add fake platforms to bypass that
 rule. The other sectors have five clearly identified authoring-validator
 markers on connected existing walkable cells for editor validation: land, or in
-B07 and C03 a boardwalk or pier deck. They lie in the same walkable area as the
+B07 the Palm Island boardwalk and in C03 the Donnelly Park stage's planks. They lie in the same walkable area as the
 sector's first sentry, because the validator walks between them within the
 sector: A04's and C06's first cells in scan order are on pier decks that reach
 land only in the next sector, so their markers stand on land. Forty-two sentries

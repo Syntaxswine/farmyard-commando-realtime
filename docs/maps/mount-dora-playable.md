@@ -47,6 +47,13 @@ all 52 mature pines and 54 mature broadleaves from the prior release. Three
 trunks moved to clear nearby sites by at most five metres. The other 103 use
 their original coordinates, and each keeps its original model variant.
 
+The November 12 integration adds 3,802 trees in canopy gaps identified in the
+December 2018 LiDAR, with the existing mature specimens retained. Thirteen
+roofs over the lake use the measured roof pieces and eave heights. Their
+supports are inferred, with posts placed clear of mapped pier decks. The
+revised pier corners and body-based walking height are checked through the
+production tour, including the roof fade under the Rusty Anchor covered pier.
+
 Five open stage/shelter decks also use integer-edge plans. The mapped Palm
 Island pavilion has bridge support under its deck and a clear connection to the
 original boardwalk. The round lighthouse and curved architectural ornament

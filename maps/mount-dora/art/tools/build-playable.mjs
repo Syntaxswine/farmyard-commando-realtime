@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
+import {runOns} from './pier-joints.mjs';
+import {BOATHOUSE_POSTS,boathousePosts,onPierDeck,pieceRoof} from './boathouse.mjs';
 const repo=fileURLToPath(new URL('../../../../',import.meta.url));
 const target=path.join(repo,'sites/tactical-animal/dist/mission-art/mount-dora');
 const bytes=fs.readFileSync(path.join(repo,'maps/mount-dora/features.json'));
@@ -122,10 +124,9 @@ for(const n of [548471563,688219167]){
 // on AFT's timber trellis, along each of the generator's deck lines
 // (nativePier.lines; the last ones may come from reviewed observations). No
 // railing is mapped or surveyed.
-// - At a joint (nativePier.joints), a line's deck runs on half its width past the
-//   joint (deck.extend) where another line leaves it more than 1 degree off its
-//   axis, so a bend's outer corner is covered; nearly straight on, it stops square.
-//   The generator rounds the walkable cells at every joint.
+// - At a joint (nativePier.joints) the decks run on past it as pier-joints.mjs says
+//   (deck.extend): the straightest pair by the mitre length, so their outer corners
+//   meet; a T's stem not at all. The generator rounds the walkable cells at every joint.
 // - Trellis caps close only free ends: not joints, and not ends standing on
 //   another deck (a stem meeting its crossbar).
 // - Decks that overlap by more than 1 cm stand at different 2 mm levels: each line
@@ -141,12 +142,15 @@ for(const f of source.features.filter(f=>f.nativePier)){
 const toLine=(p,a,b)=>{const d=[b[0]-a[0],b[1]-a[1]],t=Math.max(0,Math.min(1,((p[0]-a[0])*d[0]+(p[1]-a[1])*d[1])/(d[0]**2+d[1]**2)));return Math.hypot(p[0]-a[0]-d[0]*t,p[1]-a[1]-d[1]*t);};
 for(const line of deckLines){
  const {a,b,pier,joints}=line,len=Math.hypot(b[0]-a[0],b[1]-a[1]),u=[(b[0]-a[0])/len,(b[1]-a[1])/len];
- // An end bends where another line of the pier leaves the joint off this line's axis (more than 1 degree).
- const end=(p,out)=>{const joint=joints.has(p.join(','));const others=joint?deckLines.filter(o=>o!==line&&o.pier===pier&&[o.a,o.b].some(q=>q[0]===p[0]&&q[1]===p[1])):[];
-  const bends=others.some(o=>{const q=o.a[0]===p[0]&&o.a[1]===p[1]?o.b:o.a,w=[q[0]-p[0],q[1]-p[1]],l=Math.hypot(...w);return Math.abs(out[0]*w[1]/l-out[1]*w[0]/l)>Math.sin(Math.PI/180)||out[0]*w[0]+out[1]*w[1]>0;});
+ const end=p=>{
+  const joint=joints.has(p.join(','));let extend=0;
+  if(joint){
+   const at=deckLines.filter(o=>o.pier===pier&&[o.a,o.b].some(q=>q[0]===p[0]&&q[1]===p[1]));
+   extend=runOns(p,at.map(o=>[o.a,o.b]),pier.widthM,line.f.id)[at.indexOf(line)];
+  }
   const onDeck=!joint&&deckLines.some(o=>o!==line&&toLine(p,o.a,o.b)<pier.widthM/2);
-  return {joint,extend:bends?pier.widthM/2:0,cap:!joint&&!onDeck};};
- line.ends=[end(a,u),end(b,[-u[0],-u[1]])];
+  return {joint,extend:r(extend),cap:!joint&&!onDeck};};
+ line.ends=[end(a),end(b)];
  line.footprint=[[-line.ends[0].extend,-pier.widthM/2],[len+line.ends[1].extend,-pier.widthM/2],[len+line.ends[1].extend,pier.widthM/2],[-line.ends[0].extend,pier.widthM/2]].map(([s,t])=>[a[0]+u[0]*s-u[1]*t,a[1]+u[1]*s+u[0]*t]);
 }
 // Two convex footprints overlap if no edge normal separates them by more than a centimetre.
@@ -179,6 +183,30 @@ for(const f of source.features.filter(f=>f.nativeRailway)){
   }
  }
 }
+// Roofs the 2018 lidar sees over Lake Dora where no OSM or county outline exists:
+// boathouses and covered slips (reference/lidar/water-roofs.json, from
+// tools/maps/lidar/water-roofs.mjs), one placement per roof. boathouse.mjs holds the rules:
+// each piece a roof at its own measured eave above the lake, in the lidar's form where
+// that is confident and flat otherwise; posts at its corners and along its sides, none on
+// a pier deck. Walls and cover are unknown: drawn open on posts, under the metal the
+// county records draw (COVERS.metal), as covered slips commonly are.
+const waterRoofsBytes=fs.readFileSync(path.join(repo,'maps/mount-dora/reference/lidar/water-roofs.json')),waterRoofs=JSON.parse(waterRoofsBytes);
+// On a drawn pier deck (boathouse.mjs onPierDeck), or within `margin` of a mapped platform outline.
+const fromRing=(q,ring)=>Math.min(...ring.slice(1).map((b,i)=>{const a=ring[i],d=[b[0]-a[0],b[1]-a[1]],t=Math.max(0,Math.min(1,((q[0]-a[0])*d[0]+(q[1]-a[1])*d[1])/(d[0]**2+d[1]**2||1)));return Math.hypot(q[0]-a[0]-d[0]*t,q[1]-a[1]-d[1]*t);}));
+const onAnyDeck=(q,margin)=>output.some(p=>p.kind==='pier-deck'?pointInside(q,p.points)||fromRing(q,p.points)<=margin:p.kind==='pier'&&onPierDeck(q,p,margin));
+for(const roof of waterRoofs.roofs){
+ const id='md:water-roof:'+roof.id.replace(/^lidar-water-roof-/,''),points=roof.pieces.flatMap(pc=>pc.outline);
+ const pieces=roof.pieces.map(pc=>{const {style,pitch,ridgeBearingDeg}=pieceRoof(pc),out={points:pc.outline.map(q=>q.map(r)),eave:pc.eaveM,style,pitch,form:pc.form,confidence:pc.confidence,lakeShare:pc.lakeShare,nearBar:pc.nearBar};if(ridgeBearingDeg!==undefined)out.ridgeBearingDeg=ridgeBearingDeg;return out;});
+ const {posts,moved,leftOff}=boathousePosts(roof.pieces,q=>onAnyDeck(q,BOATHOUSE_POSTS.radiusM),BOATHOUSE_POSTS,r);
+ output.push({id,kind:'boathouse',sourceIds:[roof.id],anchor:centre(bound(points)),bounds:expand(bound(points),.3),pieces,posts,
+  treatment:{...COVERS.metal,wall:'dark-wood'},seed:hash(id),collisionPolicy:'additional-solids',solids:posts.map(([x,y])=>({kind:'circle',centre:[x,y],radius:BOATHOUSE_POSTS.radiusM})),replacesSourceIds:[],
+  provenance:{position:'lidar-water-roof',source:'maps/mount-dora/reference/lidar/water-roofs.json, USGS 3DEP '+waterRoofs.collection.dataset+' flown '+waterRoofs.collection.acquired.join(' to '),
+   footprint:'rectangles around the roof\'s own building returns, in the town frame (the outline registration taken out); about a lidar cell (0.5 m) uncertain',
+   height:'eave per piece above the lake\'s lidar level ('+waterRoofs.lakeLevelM+' m); posts stand on the game\'s ground level',
+   ground:'unchanged: the game paints water inside Lake Dora\'s OSM outline (each piece\'s lakeShare) and land where the lidar\'s water runs past that outline',
+   roof:'form from the lidar where confident (0.7), flat otherwise; cover unknown, drawn as metal',walls:'unknown; drawn open',posts:'inferred: corners and at most '+BOATHOUSE_POSTS.gapM+' m apart'+(moved?'; '+moved+' moved off a mapped pier deck':'')+(leftOff?'; '+leftOff+' left off one':''),
+   notSeen:'Boathouses built or removed since December 2018',sourceRefs:['usgs-3dep-2018']}});
+}
 output.sort((a,b)=>a.id.localeCompare(b.id));
 for(const p of output)if(!p.bounds.every(Number.isFinite)||p.bounds[0]>p.bounds[2]||p.bounds[1]>p.bounds[3])throw Error('Invalid production bounds '+p.id);
 // Exact shared outline edges have one visual owner. Do not modify any ring or
@@ -196,5 +224,5 @@ for(const rel of ['packages/building-catalog/three.js','packages/building-catalo
 const atlas=fs.readFileSync(path.join(repo,'maps/mount-dora/art/source/nautilus/assets/buildings/painted-materials-v2.png'));
 fs.writeFileSync(path.join(target,'painted-materials-bbe33709.png'),atlas);
 const railwaySource=JSON.parse(fs.readFileSync(path.join(repo,'maps/mount-dora/art/source/nautilus/packages/railway-visuals/SOURCE.json')));
-fs.writeFileSync(path.join(target,'provenance.json'),JSON.stringify({schema:'mount-dora-production-art/1',engineRevision:'2502646482218524fd5129641da769bb82462e4d',railwayRevision:railwaySource.commit,railwayBranch:railwaySource.branch,farmyardBase:'75a6b61a547a96edebdc456e9a42edb4f28185e4',featuresSHA256:sourceHash,artRevision:digest,files,atlasSHA256:createHash('sha256').update(atlas).digest('hex'),placements:output.length,buildingCount:950,coordinates:'town east/south metres; no half-cell transform',sourceNotice:'Geometry and painted materials copied unchanged from the retained fixed source; map data Ã‚Â© OpenStreetMap contributors, ODbL 1.0. Details and heights are explicit approximations.'},null,2)+'\n');
+fs.writeFileSync(path.join(target,'provenance.json'),JSON.stringify({schema:'mount-dora-production-art/1',waterRoofs:{file:'maps/mount-dora/reference/lidar/water-roofs.json',sha256:createHash('sha256').update(waterRoofsBytes).digest('hex'),roofs:waterRoofs.roofs.length},engineRevision:'2502646482218524fd5129641da769bb82462e4d',railwayRevision:railwaySource.commit,railwayBranch:railwaySource.branch,farmyardBase:'75a6b61a547a96edebdc456e9a42edb4f28185e4',featuresSHA256:sourceHash,artRevision:digest,files,atlasSHA256:createHash('sha256').update(atlas).digest('hex'),placements:output.length,buildingCount:950,coordinates:'town east/south metres; no half-cell transform',sourceNotice:'Geometry and painted materials copied unchanged from the retained fixed source; map data Ã‚Â© OpenStreetMap contributors, ODbL 1.0. Details and heights are explicit approximations.'},null,2)+'\n');
 console.log(JSON.stringify({placements:output.length,buildings:output.filter(p=>p.kind==='building').length,boardwalkPieces:output.filter(p=>p.kind==='boardwalk').length,pierPieces:output.filter(p=>p.kind==='pier').length,railwayPlacements:output.filter(p=>p.kind==='railway').length,railwayPieces:output.filter(p=>p.kind==='railway').reduce((n,p)=>n+p.pieces.length,0),artRevision:digest}));

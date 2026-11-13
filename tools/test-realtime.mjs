@@ -167,6 +167,12 @@ try{
     'Rusty Anchor raised pier',90000,townSnapshot);
   assert.equal(dock.player.ground,'bridge');
   await moveTo(page,{x:136,y:641});
+  const covered=await wait(page,t=>t.ready&&t.actor.visible&&t.actor.standY===.4&&
+    t.render?.landmarks?.fadedPlacements.includes('md:water-roof:3'),
+    'Rusty Anchor covered pier exposes the animal',25000,townSnapshot);
+  assert.equal(covered.player.ground,'bridge');
+  await screenshot(page,'mount-dora-covered-pier');
+  mark('Mount Dora uses the LiDAR boathouse roof and fades it while the animal walks underneath');
   await moveTo(page,{x:136,y:646});
   const branch=await wait(page,t=>!t.queueLength&&t.player.ground==='bridge','Rusty Anchor T branch',25000,townSnapshot);
   assert.equal(branch.actor.standY,.4);
